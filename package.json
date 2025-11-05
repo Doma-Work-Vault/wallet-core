@@ -1,0 +1,56 @@
+{
+  "name": "@bittasker/wallet-core",
+  "version": "0.1.0",
+  "description": "Multi-chain Bitcoin wallet SDK for RSK, BSC, Lightning swaps, and Liquid swaps",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "type": "module",
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "test": "vitest",
+    "prepublishOnly": "npm run build && npm test"
+  },
+  "keywords": [
+    "bitcoin",
+    "wallet",
+    "rsk",
+    "rootstock",
+    "bsc",
+    "lightning",
+    "liquid",
+    "boltz",
+    "swaps",
+    "rif-relay",
+    "typescript"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/bittasker/bittasker-wallet.git"
+  },
+  "peerDependencies": {
+    "ethers": "^6.15.0"
+  },
+  "dependencies": {
+    "axios": "^1.8.4",
+    "bip32": "^4.0.0",
+    "bip39": "^3.1.0",
+    "bitcoinjs-lib": "^6.1.0",
+    "boltz-core": "^3.0.0",
+    "ecpair": "^3.0.0",
+    "liquidjs-lib": "^6.0.2-liquid.37",
+    "tiny-secp256k1": "^2.2.4"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.0.0",
+    "vitest": "^3.0.0"
+  }
+}
+
