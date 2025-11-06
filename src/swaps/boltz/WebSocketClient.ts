@@ -131,7 +131,6 @@ export class BoltzWebSocket {
 	private handleMessage(message: WebSocketMessage): void {
 		switch (message.event) {
 			case 'subscribe':
-				console.log('Subscription confirmed:', message.args);
 				break;
 
 			case 'update':
@@ -228,9 +227,4 @@ export class BoltzWebSocket {
 		}
 	}
 }
-
-// Example usage:
-// import { BoltzWebSocket, getWebSocketEndpoint } from '@bittasker/wallet-core';
-// const boltzWebSocket = new BoltzWebSocket(getWebSocketEndpoint('testnet'));
-// boltzWebSocket.connect();
 

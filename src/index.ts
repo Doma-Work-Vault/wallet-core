@@ -62,6 +62,8 @@ export type { SwapStorage } from './swaps/boltz/storage';
 
 // Boltz types
 export type {
+    BoltzSwapData,
+    ChainSwapData,
     SwapStatus,
     ChainSwapStatus,
     SwapEvent,

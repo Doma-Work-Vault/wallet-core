@@ -37,7 +37,7 @@
  * - transaction.claimed: We claimed RBTC ✅
  */
 
-import type { SwapEvent, ChainSwapStatus } from './types';
+import type { SwapEvent, ChainSwapStatus, ChainSwapData } from './types';
 import { crypto } from 'bitcoinjs-lib';
 import { randomBytes } from 'crypto';
 import { BoltzClient, getLockupEventParameters } from './BoltzClient';
@@ -50,50 +50,7 @@ import { isRifRelayAvailable, getLiquidAssetId } from '../../utils/networkConfig
 import EtherSwapArtifact from 'boltz-core/out/EtherSwap.sol/EtherSwap.json';
 import type { NetworkType } from '../../core/types';
 import type { SwapStorage } from './storage';
-// import { ChainSwapRefundService } from '$lib/integrations/boltz/refund';
-// import type { RefundParams, RefundResult, RefundCheck } from '$lib/integrations/boltz/refund';
 // Note: Refund service not yet migrated - L-BTC refunds require liquidjs-lib which has browser compatibility issues
-
-// Chain swap data structure for Nostr storage
-export interface ChainSwapData {
-	id: string;
-	type: 'chain';
-	preimage: string; // Encrypted
-	preimageHash: string;
-
-	// L-BTC side (user sends)
-	fromAsset: 'L-BTC';
-	fromAmount: number; // sats
-	lockupAddress: string; // L-BTC address
-	blindingKey: string;
-	liquidUri: string; // Full payment URI
-	lockupTxHash?: string;
-	lockupTimeoutBlockHeight: number;
-	swapTree?: string; // Taproot swap tree for refunds (from API response)
-	serverPublicKey?: string; // Boltz's public key for refunds (from API response)
-
-	// Refund key (REQUIRED for chain swaps)
-	refundPublicKey: string;
-	refundPrivateKey: string; // Encrypted in Nostr
-	refundTxHash?: string; // L-BTC refund transaction hash
-
-	// RBTC side (user receives)
-	toAsset: 'RBTC';
-	toAmount: number; // sats
-	rbtcAddress: string; // User's actual wallet address
-	claimAddress?: string; // Address used for claiming (may be Smart Wallet)
-	claimTimeoutBlockHeight: number;
-	serverLockupTxHash?: string; // Boltz's RBTC lockup transaction hash
-	claimTxHash?: string;
-	refundAddress: string; // Boltz's refund address
-
-	// Status
-	status: ChainSwapStatus;
-	createdAt: number;
-	updatedAt: number;
-	expiresAt: number;
-	rifRelayUsed?: boolean; // Track if RIF Relay was used for gasless claiming
-}
 
 const ECPair = ECPairFactory(ecc);
 
@@ -106,14 +63,18 @@ export class ChainSwapService {
 	private walletGetter: (() => any) | null = null;
 	private storage?: SwapStorage;
 
-	constructor(network: NetworkType = 'testnet', storage?: SwapStorage) {
+	constructor(network: NetworkType = 'testnet', storage?: SwapStorage, websocket?: BoltzWebSocket) {
 		this.boltzClient = new BoltzClient(network);
 		this.storage = storage;
 		// this.refundService = new ChainSwapRefundService(network, this.boltzClient);
-		
-		// Initialize WebSocket
-		const { getWebSocketEndpoint } = require('../../utils/networkConfig');
-		this.websocket = new BoltzWebSocket(getWebSocketEndpoint(network));
+
+		// Use provided WebSocket or create a new one (for backwards compatibility)
+		if (websocket) {
+			this.websocket = websocket;
+		} else {
+			const { getWebSocketEndpoint } = require('../../utils/networkConfig');
+			this.websocket = new BoltzWebSocket(getWebSocketEndpoint(network));
+		}
 	}
 
 	/**
@@ -322,10 +283,7 @@ export class ChainSwapService {
 		}
 
 		// Subscribe to WebSocket updates
-		this.websocket.subscribeToSwap(
-			swapData.id,
-			(event) => this.handleSwapUpdate(event)
-		);
+		this.websocket.subscribeToSwap(swapData.id, (event) => this.handleSwapUpdate(event));
 
 		return {
 			swapId: swapData.id,
@@ -432,8 +390,8 @@ export class ChainSwapService {
 			// Update status and save to Nostr
 			swapData.status = 'transaction.failed';
 			if (this.storage) {
-			await this.storage.save(swapData.id, swapData);
-		}
+				await this.storage.save(swapData.id, swapData);
+			}
 		}
 	}
 
@@ -536,8 +494,8 @@ export class ChainSwapService {
 			swapData.rifRelayUsed = true;
 			swapData.updatedAt = Date.now();
 			if (this.storage) {
-			await this.storage.save(swapData.id, swapData);
-		}
+				await this.storage.save(swapData.id, swapData);
+			}
 
 			// Wait for confirmation
 			const receipt = await wallet.provider.waitForTransaction(claimTxHash);
@@ -548,8 +506,8 @@ export class ChainSwapService {
 			swapData.status = 'transaction.claimed';
 			swapData.updatedAt = Date.now();
 			if (this.storage) {
-			await this.storage.save(swapData.id, swapData);
-		}
+				await this.storage.save(swapData.id, swapData);
+			}
 
 			console.log('🎉 Successfully claimed via RIF Relay!');
 		} catch (error) {
@@ -557,8 +515,8 @@ export class ChainSwapService {
 			swapData.status = 'transaction.failed';
 			swapData.updatedAt = Date.now();
 			if (this.storage) {
-			await this.storage.save(swapData.id, swapData);
-		}
+				await this.storage.save(swapData.id, swapData);
+			}
 			throw error;
 		}
 	}
@@ -671,12 +629,7 @@ export class ChainSwapService {
 					chainSwaps.push(swap as ChainSwapData);
 
 					// Re-subscribe to WebSocket
-					this.websocket.subscribeToSwap(
-						swap.id,
-						(event) => this.handleSwapUpdate(event)
-					);
-
-					console.log('🔄 Recovered pending chain swap:', swap.id);
+					this.websocket.subscribeToSwap(swap.id, (event) => this.handleSwapUpdate(event));
 				}
 			}
 
@@ -713,7 +666,7 @@ export class ChainSwapService {
 
 			const swaps = await this.storage.loadAll();
 			let count = 0;
-			
+
 			for (const swap of swaps) {
 				if (swap.type === 'chain') {
 					await this.storage.delete(swap.id);

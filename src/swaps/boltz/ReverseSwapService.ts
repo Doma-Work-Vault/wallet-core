@@ -35,7 +35,7 @@
  * - invoice.settled: Boltz settled invoice after seeing our preimage ✅
  */
 
-import type { SwapEvent } from './types';
+import type { SwapEvent, BoltzSwapData } from './types';
 import { crypto } from 'bitcoinjs-lib';
 import { randomBytes } from 'crypto';
 import { BoltzClient, getLockupEventParameters } from './BoltzClient';
@@ -47,26 +47,6 @@ import EtherSwapArtifact from 'boltz-core/out/EtherSwap.sol/EtherSwap.json';
 import type { NetworkType } from '../../core/types';
 import type { SwapStorage } from './storage';
 
-// Swap data structure for Nostr storage
-export interface BoltzSwapData {
-	id: string;
-	preimage: string; // Will be encrypted
-	preimageHash: string;
-	invoice: string;
-	amount: number;
-	rbtcAddress: string; // User's actual wallet address
-	claimAddress?: string; // Address used for claiming (may be Smart Wallet)
-	status: string;
-	lockupTxHash?: string;
-	claimTxHash?: string;
-	onchainAmount?: number;
-	refundAddress?: string;
-	timeoutBlockHeight?: number;
-	createdAt: number;
-	updatedAt: number;
-	expiresAt?: number;
-	rifRelayUsed?: boolean; // Track if RIF Relay was used for gasless claiming
-}
 
 // Reference: https://github.com/BoltzExchange/boltz-core/blob/master/contracts/EtherSwap.sol
 
@@ -77,13 +57,17 @@ export class ReverseSwapService {
 	private walletGetter: (() => any) | null = null;
 	private storage?: SwapStorage;
 
-	constructor(network: NetworkType = 'testnet', storage?: SwapStorage) {
+	constructor(network: NetworkType = 'testnet', storage?: SwapStorage, websocket?: BoltzWebSocket) {
 		this.boltzClient = new BoltzClient(network);
 		this.storage = storage;
-		
-		// Initialize WebSocket
-		const { getWebSocketEndpoint } = require('../../utils/networkConfig');
-		this.websocket = new BoltzWebSocket(getWebSocketEndpoint(network));
+
+		// Use provided WebSocket or create a new one (for backwards compatibility)
+		if (websocket) {
+			this.websocket = websocket;
+		} else {
+			const { getWebSocketEndpoint } = require('../../utils/networkConfig');
+			this.websocket = new BoltzWebSocket(getWebSocketEndpoint(network));
+		}
 	}
 
 	/**
@@ -299,8 +283,8 @@ export class ReverseSwapService {
 					console.warn('⚠️ No wallet connected - manual claim required');
 					swapData.status = 'transaction.confirmed';
 					if (this.storage) {
-			await this.storage.save(swapData.id, swapData);
-		}
+						await this.storage.save(swapData.id, swapData);
+					}
 					break;
 				}
 
@@ -467,8 +451,8 @@ export class ReverseSwapService {
 			swapData.rifRelayUsed = true;
 			swapData.updatedAt = Date.now();
 			if (this.storage) {
-			await this.storage.save(swapData.id, swapData);
-		}
+				await this.storage.save(swapData.id, swapData);
+			}
 
 			// Wait for confirmation
 			const receipt = await walletSigner.provider.waitForTransaction(txHash);
@@ -478,8 +462,8 @@ export class ReverseSwapService {
 			swapData.status = 'claimed';
 			swapData.updatedAt = Date.now();
 			if (this.storage) {
-			await this.storage.save(swapData.id, swapData);
-		}
+				await this.storage.save(swapData.id, swapData);
+			}
 
 			console.log('🎉 Successfully claimed via RIF Relay!');
 			return { txHash };
@@ -488,8 +472,8 @@ export class ReverseSwapService {
 			swapData.status = 'transaction.claim.failed';
 			swapData.updatedAt = Date.now();
 			if (this.storage) {
-			await this.storage.save(swapData.id, swapData);
-		}
+				await this.storage.save(swapData.id, swapData);
+			}
 			throw error;
 		}
 	}
@@ -691,8 +675,8 @@ export class ReverseSwapService {
 			swapData.status = 'transaction.claim.pending';
 			swapData.updatedAt = Date.now();
 			if (this.storage) {
-			await this.storage.save(swapData.id, swapData);
-		}
+				await this.storage.save(swapData.id, swapData);
+			}
 
 			// Wait for transaction confirmation
 			const receipt = await tx.wait();
@@ -706,8 +690,8 @@ export class ReverseSwapService {
 			swapData.status = 'claimed';
 			swapData.updatedAt = Date.now();
 			if (this.storage) {
-			await this.storage.save(swapData.id, swapData);
-		}
+				await this.storage.save(swapData.id, swapData);
+			}
 
 			console.log('✅ Successfully claimed', swapData.onchainAmount, 'sats');
 
@@ -731,8 +715,8 @@ export class ReverseSwapService {
 			swapData.status = 'transaction.claim.failed';
 			swapData.updatedAt = Date.now();
 			if (this.storage) {
-			await this.storage.save(swapData.id, swapData);
-		}
+				await this.storage.save(swapData.id, swapData);
+			}
 
 			throw error;
 		}
@@ -801,7 +785,7 @@ export class ReverseSwapService {
 			}
 
 			const swaps = await this.storage.loadAll();
-			
+
 			for (const swap of swaps) {
 				await this.storage.delete(swap.id);
 			}

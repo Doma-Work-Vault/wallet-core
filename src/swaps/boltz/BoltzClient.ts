@@ -760,7 +760,6 @@ export class BoltzClient {
 	async getReverseSwapPairs(): Promise<any> {
 		try {
 			const response = await this.request('GET', '/v2/swap/reverse');
-			console.log('🔍 Reverse swap pairs response:', response);
 			return response;
 		} catch (error) {
 			console.error('Failed to get reverse swap pairs:', error);
@@ -778,7 +777,6 @@ export class BoltzClient {
 	async getChainSwapPairs(): Promise<any> {
 		try {
 			const response = await this.request('GET', '/v2/swap/chain');
-			console.log('🔍 Chain swap pairs response:', response);
 			return response;
 		} catch (error) {
 			console.error('Failed to get chain swap pairs:', error);

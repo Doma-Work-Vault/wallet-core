@@ -15,11 +15,12 @@ import type { NetworkType } from './types';
 import type { SwapStorage } from '../swaps/boltz/storage';
 import type { RSKWalletConfig } from '../chains/rsk/RSKWallet';
 import type { BSCWalletConfig } from '../chains/bsc/BSCWallet';
-import { setNetworkGetter } from '../utils/networkConfig';
+import { setNetworkGetter, getWebSocketEndpoint } from '../utils/networkConfig';
 import { RSKWallet } from '../chains/rsk/RSKWallet';
 import { BSCWallet } from '../chains/bsc/BSCWallet';
 import { ChainSwapService } from '../swaps/boltz/ChainSwapService';
 import { ReverseSwapService } from '../swaps/boltz/ReverseSwapService';
+import { BoltzWebSocket } from '../swaps/boltz/WebSocketClient';
 
 export interface WalletManagerConfig {
 	/** Network type: 'mainnet' or 'testnet' */
@@ -69,6 +70,7 @@ export class WalletManager {
 	private _bscWallet: BSCWallet | null = null;
 	private _reverseSwapService: ReverseSwapService | null = null;
 	private _chainSwapService: ChainSwapService | null = null;
+	private _websocket: BoltzWebSocket | null = null;
 	
 	constructor(config: WalletManagerConfig) {
 		this.config = config;
@@ -76,10 +78,21 @@ export class WalletManager {
 		// Set global network getter so all SDK functions can access the network
 		setNetworkGetter(() => this.config.network);
 		
+		// Initialize WebSocket for swap monitoring (uses global network getter)
+		this._websocket = new BoltzWebSocket(getWebSocketEndpoint());
+		
 		// Initialize swap services if storage is provided
 		if (config.swapStorage) {
-			this._reverseSwapService = new ReverseSwapService(config.network, config.swapStorage);
-			this._chainSwapService = new ChainSwapService(config.network, config.swapStorage);
+			this._reverseSwapService = new ReverseSwapService(
+				config.network, 
+				config.swapStorage,
+				this._websocket
+			);
+			this._chainSwapService = new ChainSwapService(
+				config.network, 
+				config.swapStorage,
+				this._websocket
+			);
 		}
 	}
 	
@@ -112,8 +125,26 @@ export class WalletManager {
 			this._chainSwapService.setWalletGetter(() => this._rskWallet!.getWallet());
 		}
 		
+		// Connect WebSocket for swap monitoring (if swap services are enabled)
+		if (this._reverseSwapService || this._chainSwapService) {
+			await this.connectWebSocket();
+		}
+		
 		// Recover pending swaps
-		await this.recoverPendingSwaps();
+		// await this.recoverPendingSwaps();
+	}
+	
+	/**
+	 * Connect WebSocket for real-time swap monitoring
+	 */
+	private async connectWebSocket(): Promise<void> {
+		try {
+			if (this._websocket) {
+				await this._websocket.connect();
+			}
+		} catch (error) {
+			console.warn('⚠️ Failed to connect WebSocket for swap monitoring:', error);
+		}
 	}
 	
 	/**

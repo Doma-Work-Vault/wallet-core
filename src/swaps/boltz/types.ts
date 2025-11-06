@@ -351,3 +351,67 @@ export interface PreimageClaimParams {
 	claimPrivateKey: string;
 	feeRate: number;
 }
+
+// ============================================================================
+// Boltz Swap Types
+// ============================================================================
+
+export interface BoltzSwapData {
+	id: string;
+	preimage: string; // Will be encrypted
+	preimageHash: string;
+	invoice: string;
+	amount: number;
+	rbtcAddress: string; // User's actual wallet address
+	claimAddress?: string; // Address used for claiming (may be Smart Wallet)
+	status: string;
+	lockupTxHash?: string;
+	claimTxHash?: string;
+	onchainAmount?: number;
+	refundAddress?: string;
+	timeoutBlockHeight?: number;
+	createdAt: number;
+	updatedAt: number;
+	expiresAt?: number;
+	rifRelayUsed?: boolean; // Track if RIF Relay was used for gasless claiming
+}
+
+export interface ChainSwapData {
+	id: string;
+	type: 'chain';
+	preimage: string; // Encrypted
+	preimageHash: string;
+
+	// L-BTC side (user sends)
+	fromAsset: 'L-BTC';
+	fromAmount: number; // sats
+	lockupAddress: string; // L-BTC address
+	blindingKey: string;
+	liquidUri: string; // Full payment URI
+	lockupTxHash?: string;
+	lockupTimeoutBlockHeight: number;
+	swapTree?: string; // Taproot swap tree for refunds (from API response)
+	serverPublicKey?: string; // Boltz's public key for refunds (from API response)
+
+	// Refund key (REQUIRED for chain swaps)
+	refundPublicKey: string;
+	refundPrivateKey: string; // Encrypted in Nostr
+	refundTxHash?: string; // L-BTC refund transaction hash
+
+	// RBTC side (user receives)
+	toAsset: 'RBTC';
+	toAmount: number; // sats
+	rbtcAddress: string; // User's actual wallet address
+	claimAddress?: string; // Address used for claiming (may be Smart Wallet)
+	claimTimeoutBlockHeight: number;
+	serverLockupTxHash?: string; // Boltz's RBTC lockup transaction hash
+	claimTxHash?: string;
+	refundAddress: string; // Boltz's refund address
+
+	// Status
+	status: ChainSwapStatus;
+	createdAt: number;
+	updatedAt: number;
+	expiresAt: number;
+	rifRelayUsed?: boolean; // Track if RIF Relay was used for gasless claiming
+}
