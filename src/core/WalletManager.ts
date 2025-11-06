@@ -220,31 +220,6 @@ export class WalletManager {
 	}
 	
 	/**
-	 * Recover pending swaps from storage
-	 */
-	private async recoverPendingSwaps(): Promise<void> {
-		if (!this.config.swapStorage) {
-			return;
-		}
-		
-		try {
-			// Recover reverse swaps (Lightning → RBTC)
-			if (this._reverseSwapService) {
-				const reverseSwaps = await this._reverseSwapService.recoverPendingSwaps();
-				console.log(`Recovered ${reverseSwaps.length} pending Lightning → RBTC swaps`);
-			}
-			
-			// Recover chain swaps (L-BTC → RBTC)
-			if (this._chainSwapService) {
-				const chainSwaps = await this._chainSwapService.recoverPendingSwaps();
-				console.log(`Recovered ${chainSwaps.length} pending L-BTC → RBTC swaps`);
-			}
-		} catch (error) {
-			console.error('Failed to recover pending swaps:', error);
-		}
-	}
-	
-	/**
 	 * Get wallet addresses
 	 */
 	getAddresses(): {

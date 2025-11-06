@@ -182,29 +182,3 @@ export interface BoltzNetworkConfig {
 	};
 }
 
-/**
- * Wallet configuration options
- */
-export interface WalletConfig {
-  network: NetworkType;
-  rsk?: {
-    rpcUrl?: string;
-    explorerApiUrl?: string;
-  };
-  bsc?: {
-    rpcUrl?: string;
-    explorerApiUrl?: string;
-  };
-}
-
-/**
- * External dependencies injected into wallet
- */
-export interface WalletDependencies {
-  mnemonicProvider: () => Promise<string>;
-  priceService?: {
-    getCurrentPrice: (symbol: string) => Promise<number>;
-    getExchangeRate: (from: string, to: string) => Promise<number>;
-  };
-}
-

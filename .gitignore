@@ -7,3 +7,20 @@ dist/
 .env.*
 !.env.example
 
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*.sublime-*
+
+# Testing
+coverage/
+.nyc_output/
+test-results/
+
+# Build
+*.tsbuildinfo
+
+# OS
+Thumbs.db

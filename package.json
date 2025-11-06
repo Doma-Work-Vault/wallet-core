@@ -20,8 +20,7 @@
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",
-    "test": "vitest",
-    "prepublishOnly": "npm run build && npm test"
+    "prepublishOnly": "npm run build"
   },
   "keywords": [
     "bitcoin",
@@ -29,21 +28,37 @@
     "rsk",
     "rootstock",
     "bsc",
+    "binance-smart-chain",
     "lightning",
+    "lightning-network",
     "liquid",
+    "liquid-network",
     "boltz",
-    "swaps",
+    "atomic-swaps",
     "rif-relay",
-    "typescript"
+    "gasless",
+    "gasless-transactions",
+    "typescript",
+    "blockchain",
+    "cryptocurrency",
+    "defi",
+    "web3",
+    "ethereum",
+    "smart-contracts",
+    "hd-wallet",
+    "bip39",
+    "multi-chain"
   ],
+  "author": "BitTasker Team <hello@bittasker.com>",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/bittasker/bittasker-wallet.git"
+    "url": "https://gitlab.com/bittasker/wallet-core.git"
   },
-  "peerDependencies": {
-    "ethers": "^6.15.0"
+  "bugs": {
+    "url": "https://gitlab.com/bittasker/wallet-core/-/issues"
   },
+  "homepage": "https://gitlab.com/bittasker/wallet-core#readme",
   "dependencies": {
     "axios": "^1.8.4",
     "bip32": "^4.0.0",
@@ -51,6 +66,7 @@
     "bitcoinjs-lib": "^6.1.0",
     "boltz-core": "^3.0.0",
     "ecpair": "^3.0.0",
+    "ethers": "^6.15.0",
     "liquidjs-lib": "^6.0.2-liquid.37",
     "tiny-secp256k1": "^2.2.4"
   },

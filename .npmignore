@@ -1,0 +1,34 @@
+# Source files
+src/
+*.ts
+!*.d.ts
+
+# Development files
+node_modules/
+*.log
+.DS_Store
+.env
+.env.*
+
+# Config files
+tsconfig.json
+rollup.config.js
+.git
+.gitignore
+
+# Test files
+test/
+tests/
+*.test.ts
+*.spec.ts
+coverage/
+vitest.config.ts
+
+# Build artifacts
+*.tgz
+
+# Documentation
+docs/
+.vscode/
+.idea/
+

@@ -7,8 +7,6 @@
 export { EventEmitter } from './core/EventEmitter';
 export type {
     WalletState,
-    WalletConfig,
-    WalletDependencies,
     Transaction,
     NetworkType,
     ERC20Token,
