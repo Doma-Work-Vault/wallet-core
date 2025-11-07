@@ -13,7 +13,6 @@ import { ethers } from 'ethers';
  */
 export async function loadBSCTransactions(
     address: string,
-    network: 'mainnet' | 'testnet',
     apiKey?: string
 ): Promise<Transaction[]> {
     try {

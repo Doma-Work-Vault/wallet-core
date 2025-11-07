@@ -845,12 +845,8 @@ export class BoltzClient {
 			referralId: params.referralId || ''
 		};
 
-		console.log('🔍 Chain swap request:', request);
-
 		try {
 			const response = await this.request('POST', '/v2/swap/chain', request);
-
-			console.log('🔍 Chain swap response:', response);
 
 			// Validate response structure
 			if (!response.id || !response.lockupDetails || !response.claimDetails) {
@@ -998,7 +994,6 @@ export class BoltzClient {
 	}> {
 		try {
 			const response = await this.request('GET', '/v2/chain/contracts');
-			console.log('🔍 Contract addresses response:', response);
 
 			if (!response) {
 				throw new BoltzError('Invalid contracts response', 'INVALID_RESPONSE');
@@ -1708,7 +1703,6 @@ export async function getLockupEventParameters(
 	timelock: number;
 } | null> {
 	try {
-		console.log('🔍 Fetching lockup transaction receipt:', lockupTxHash);
 
 		// Wait for the transaction receipt with retry logic
 		// The RPC node might need a few moments to index the transaction
@@ -1720,12 +1714,10 @@ export async function getLockupEventParameters(
 			receipt = await provider.getTransactionReceipt(lockupTxHash);
 
 			if (receipt) {
-				console.log('✅ Receipt found after', i + 1, 'attempt(s)');
 				break;
 			}
 
 			if (i < maxRetries - 1) {
-				console.log(`⏳ Receipt not available yet, waiting ${retryDelay}ms... (attempt ${i + 1}/${maxRetries})`);
 				await new Promise(resolve => setTimeout(resolve, retryDelay));
 			}
 		}
@@ -1734,8 +1726,6 @@ export async function getLockupEventParameters(
 			console.error('❌ Transaction receipt not found after', maxRetries, 'attempts');
 			return null;
 		}
-
-		console.log('📋 Receipt found with', receipt.logs.length, 'logs');
 
 		// Create contract interface to parse events
 		const iface = new Interface(EtherSwapArtifact.abi);
@@ -1756,21 +1746,12 @@ export async function getLockupEventParameters(
 					data: log.data
 				});
 
-				console.log('📝 Parsed event:', parsed?.name, 'with args:', parsed?.args);
-
 				if (parsed?.name === 'Lockup') {
 					// Event structure: Lockup(bytes32 indexed preimageHash, uint256 amount, address claimAddress, address indexed refundAddress, uint256 timelock)
 					const eventPreimageHash = parsed.args[0];
 
-					console.log('🔍 Checking Lockup event:', {
-						eventPreimageHash,
-						expectedPreimageHash: preimageHashWithPrefix,
-						matches: eventPreimageHash.toLowerCase() === preimageHashWithPrefix.toLowerCase()
-					});
-
 					// Check if this is the event for our swap
 					if (eventPreimageHash.toLowerCase() === preimageHashWithPrefix.toLowerCase()) {
-						console.log('✅ Found Lockup event with actual parameters');
 						return {
 							amount: parsed.args[1],
 							claimAddress: parsed.args[2],
@@ -1781,7 +1762,7 @@ export async function getLockupEventParameters(
 				}
 			} catch (e) {
 				// Not a Lockup event or failed to parse, continue
-				console.log('⚠️ Failed to parse log:', e);
+				console.error('⚠️ Failed to parse log:', e);
 			}
 		}
 
@@ -1792,7 +1773,3 @@ export async function getLockupEventParameters(
 		return null;
 	}
 }
-
-// Example usage:
-// import { BoltzClient } from '@bittasker/wallet-core';
-// const boltzClient = new BoltzClient('testnet');

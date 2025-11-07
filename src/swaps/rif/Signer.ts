@@ -65,7 +65,6 @@ export const relayClaimTransaction = async (
 
 	const smartWalletExists =
 		(await signer.provider!.getCode(smartWalletAddress.address)) !== "0x";
-	console.log("RIF smart wallet exists:", smartWalletExists);
 
 	const smartWalletFactory = getSmartWalletFactory(signer);
 	const config = getBoltzConfig();
@@ -112,7 +111,6 @@ export const relayClaimTransaction = async (
 	};
 
 	const estimateRes = await estimate(envelopingRequest, metadata);
-	console.log("RIF gas estimation response", estimateRes);
 
 	envelopingRequest.request.tokenGas = estimateRes.estimation;
 	envelopingRequest.request.tokenAmount = estimateRes.requiredTokenAmount;
@@ -136,7 +134,7 @@ export const getSmartWalletAddress = async (
 		ZeroAddress,
 		nonce
 	);
-	console.log(`RIF smart wallet address ${smartWalletAddress} with nonce ${nonce}`);
+
 	return {
 		nonce,
 		address: smartWalletAddress

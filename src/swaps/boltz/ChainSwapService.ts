@@ -42,7 +42,7 @@ import { crypto } from 'bitcoinjs-lib';
 import { randomBytes } from 'crypto';
 import { BoltzClient, getLockupEventParameters } from './BoltzClient';
 import { BoltzWebSocket } from './WebSocketClient';
-import { Contract } from 'ethers';
+import { Contract, ethers } from 'ethers';
 import { ECPairFactory } from 'ecpair';
 import * as ecc from 'tiny-secp256k1';
 import { relayClaimTransaction, getSmartWalletAddress } from '../rif/Signer';
@@ -62,6 +62,7 @@ export class ChainSwapService {
 	private activeSwaps: Map<string, ChainSwapData> = new Map();
 	private walletGetter: (() => any) | null = null;
 	private storage?: SwapStorage;
+	private claimingSwaps: Set<string> = new Set();
 
 	constructor(network: NetworkType = 'testnet', storage?: SwapStorage, websocket?: BoltzWebSocket) {
 		this.boltzClient = new BoltzClient(network);
@@ -150,22 +151,26 @@ export class ChainSwapService {
 	async createChainSwap(params: {
 		amountSats: number;
 		rbtcAddress: string;
-		walletSigner?: any; // Optional: wallet signer to check balance and compute Smart Wallet
+		walletSigner?: ethers.Signer; // Optional: wallet signer to check balance and compute Smart Wallet
 	}): Promise<{ swapId: string; liquidUri: string; swapData: ChainSwapData }> {
+		// Validate RBTC address
+		if (!params.rbtcAddress || !ethers.isAddress(params.rbtcAddress)) {
+			throw new Error('Invalid RBTC address format');
+		}
+
 		// Generate preimage and hash
 		const preimage = randomBytes(32);
 		const preimageHash = crypto.sha256(preimage).toString('hex');
 
 		// Generate refund key for L-BTC
 		const refundKey = this.generateRefundKey();
-		console.log('🔍 Refund key:', refundKey);
 
 		// Determine which address to use for claiming RBTC
 		let claimAddress = params.rbtcAddress; // Default to user's wallet
 		let useSmartWallet = false;
 
 		// Check if we should use Smart Wallet (gasless via RIF Relay)
-		if (isRifRelayAvailable() && params.walletSigner) {
+		if (isRifRelayAvailable() && params.walletSigner && params.walletSigner.provider) {
 			try {
 				// Check user's gas balance
 				const balance = await params.walletSigner.provider.getBalance(params.rbtcAddress);
@@ -176,22 +181,11 @@ export class ChainSwapService {
 					const smartWallet = await getSmartWalletAddress(params.walletSigner);
 					claimAddress = smartWallet.address;
 					useSmartWallet = true;
-					console.log('🔧 User has insufficient gas, using Smart Wallet for gasless claim');
-					console.log('📍 Smart Wallet address:', claimAddress);
-				} else {
-					console.log('💰 User has sufficient gas, using direct wallet address');
 				}
 			} catch (error) {
 				console.warn('⚠️ Could not check balance, defaulting to wallet address:', error);
 			}
 		}
-
-		console.log('🔧 Creating chain swap:', {
-			fromAmount: params.amountSats,
-			userWallet: params.rbtcAddress,
-			claimAddress: claimAddress,
-			useSmartWallet
-		});
 
 		// Get chain swap pairs to get pairHash
 		const chainPairs = await this.boltzClient.getChainSwapPairs();
@@ -222,8 +216,6 @@ export class ChainSwapService {
 			pairHash: pairInfo.hash,
 			referralId: ''
 		});
-
-		console.log('✅ Chain swap created:', swapResponse.id);
 
 		// Generate Liquid payment URI
 		const liquidUri = this.generateLiquidPaymentUri(
@@ -302,31 +294,24 @@ export class ChainSwapService {
 			return;
 		}
 
-		const oldStatus = swapData.status;
 		swapData.status = event.status as ChainSwapStatus;
 		swapData.updatedAt = Date.now();
-
-		console.log(`🔄 Chain swap ${event.swapId} status: ${oldStatus} → ${event.status}`);
 
 		// Handle different status transitions
 		switch (event.status) {
 			case 'swap.created':
-				console.log('📝 Chain swap created, waiting for user to send L-BTC');
 				break;
 
 			case 'transaction.mempool':
-				console.log('🔍 User\'s L-BTC transaction detected in mempool');
 				if (event.transaction?.id) {
 					swapData.lockupTxHash = event.transaction.id;
 				}
 				break;
 
 			case 'transaction.confirmed':
-				console.log('✅ User\'s L-BTC transaction confirmed, waiting for Boltz to lock RBTC');
 				break;
 
 			case 'transaction.server.mempool':
-				console.log('🔍 Boltz\'s RBTC lockup transaction detected in mempool');
 				// Store the RBTC lockup tx hash - we need it for claiming!
 				if (event.transaction?.id) {
 					swapData.serverLockupTxHash = event.transaction.id;
@@ -334,7 +319,6 @@ export class ChainSwapService {
 				break;
 
 			case 'transaction.server.confirmed':
-				console.log('✅ Boltz\'s RBTC lockup confirmed! Ready to claim RBTC');
 				// Store the RBTC lockup tx hash if not already set
 				if (event.transaction?.id && !swapData.serverLockupTxHash) {
 					swapData.serverLockupTxHash = event.transaction.id;
@@ -344,7 +328,6 @@ export class ChainSwapService {
 				break;
 
 			case 'transaction.claimed':
-				console.log('🎉 RBTC claimed successfully!');
 				if (event.transaction?.id) {
 					swapData.claimTxHash = event.transaction.id;
 				}
@@ -370,19 +353,26 @@ export class ChainSwapService {
 	 * This is called when Boltz has locked RBTC (transaction.server.confirmed)
 	 */
 	private async attemptClaim(swapData: ChainSwapData): Promise<void> {
+		// Prevent concurrent claims
+		if (this.claimingSwaps.has(swapData.id)) {
+			console.warn('⚠️ Claim already in progress for swap:', swapData.id);
+			return;
+		}
+
 		const wallet = this.walletGetter?.();
 		if (!wallet) {
 			console.warn('⚠️ No wallet available for auto-claim');
 			return;
 		}
 
+		// Add to claiming set
+		this.claimingSwaps.add(swapData.id);
+
 		try {
 			// Check if should use RIF Relay
 			if (swapData.rifRelayUsed || await this.shouldUseRifRelay(wallet)) {
-				console.log('🔧 Using RIF Relay for gasless claim');
 				await this.claimRBTCViaRifRelay(swapData, wallet);
 			} else {
-				console.log('💰 Using direct claim');
 				await this.claimRBTC(swapData, wallet);
 			}
 		} catch (error) {
@@ -392,17 +382,21 @@ export class ChainSwapService {
 			if (this.storage) {
 				await this.storage.save(swapData.id, swapData);
 			}
+		} finally {
+			// Always remove from claiming set
+			this.claimingSwaps.delete(swapData.id);
 		}
 	}
 
 	/**
 	 * Determine if RIF Relay should be used
 	 */
-	private async shouldUseRifRelay(wallet: any): Promise<boolean> {
-		if (!isRifRelayAvailable()) return false;
+	private async shouldUseRifRelay(wallet: ethers.Signer): Promise<boolean> {
+		if (!isRifRelayAvailable() || !wallet.provider) return false;
 
 		try {
-			const balance = await wallet.provider.getBalance(wallet.address);
+			const address = await wallet.getAddress();
+			const balance = await wallet.provider.getBalance(address);
 			const gasEstimate = 100000n * 60000000n; // ~100k gas @ 0.06 gwei
 			return balance < gasEstimate;
 		} catch (error) {
@@ -417,10 +411,22 @@ export class ChainSwapService {
 	 */
 	private async claimRBTCViaRifRelay(
 		swapData: ChainSwapData,
-		wallet: any
+		wallet: ethers.Signer
 	): Promise<void> {
 		try {
-			console.log('🚀 Starting gasless RBTC claim via RIF Relay');
+			// Check if already claimed
+			if (swapData.status === 'transaction.claimed') {
+				throw new Error('Swap already claimed');
+			}
+
+			if (swapData.claimTxHash) {
+				throw new Error(`Swap already claimed in transaction: ${swapData.claimTxHash}`);
+			}
+
+			// Prevent claim pending state
+			if (swapData.status === 'transaction.claim.pending') {
+				throw new Error('Claim already in progress');
+			}
 
 			// Get preimage
 			const preimage = swapData.preimage;
@@ -443,7 +449,6 @@ export class ChainSwapService {
 			let timelock: number;
 
 			if (swapData.serverLockupTxHash) {
-				console.log('🔍 Fetching actual lockup parameters from blockchain...');
 				const eventParams = await getLockupEventParameters(
 					etherSwapAddress,
 					swapData.preimageHash,
@@ -452,13 +457,6 @@ export class ChainSwapService {
 				);
 
 				if (eventParams) {
-					console.log('✅ Using actual Lockup event parameters:', {
-						amount: eventParams.amount.toString() + ' wei',
-						claimAddress: eventParams.claimAddress,
-						refundAddress: eventParams.refundAddress,
-						timelock: eventParams.timelock
-					});
-
 					// Convert from wei to sats for RIF Relay
 					amount = Number(eventParams.amount / 10000000000n);
 					refundAddress = eventParams.refundAddress;
@@ -486,8 +484,6 @@ export class ChainSwapService {
 				timelock
 			);
 
-			console.log('✅ Transaction relayed:', claimTxHash);
-
 			// Update swap data - PENDING status
 			swapData.claimTxHash = claimTxHash;
 			swapData.status = 'transaction.claim.pending';
@@ -498,9 +494,9 @@ export class ChainSwapService {
 			}
 
 			// Wait for confirmation
-			const receipt = await wallet.provider.waitForTransaction(claimTxHash);
-
-			console.log({ receipt });
+			if (wallet.provider) {
+				await wallet.provider.waitForTransaction(claimTxHash);
+			}
 
 			// Now mark as claimed
 			swapData.status = 'transaction.claimed';
@@ -508,8 +504,6 @@ export class ChainSwapService {
 			if (this.storage) {
 				await this.storage.save(swapData.id, swapData);
 			}
-
-			console.log('🎉 Successfully claimed via RIF Relay!');
 		} catch (error) {
 			console.error('❌ RIF Relay claim failed:', error);
 			swapData.status = 'transaction.failed';
@@ -526,9 +520,21 @@ export class ChainSwapService {
 	 */
 	private async claimRBTC(
 		swapData: ChainSwapData,
-		wallet: any
+		wallet: ethers.Signer
 	): Promise<void> {
-		console.log('🚀 Starting direct RBTC claim');
+		// Check if already claimed
+		if (swapData.status === 'transaction.claimed') {
+			throw new Error('Swap already claimed');
+		}
+
+		if (swapData.claimTxHash) {
+			throw new Error(`Swap already claimed in transaction: ${swapData.claimTxHash}`);
+		}
+
+		// Prevent claim pending state
+		if (swapData.status === 'transaction.claim.pending') {
+			throw new Error('Claim already in progress');
+		}
 
 		// Get preimage
 		const preimage = Buffer.from(swapData.preimage, 'hex');
@@ -549,7 +555,6 @@ export class ChainSwapService {
 		let timelock: number;
 
 		if (swapData.serverLockupTxHash) {
-			console.log('🔍 Fetching actual lockup parameters from blockchain...');
 			const eventParams = await getLockupEventParameters(
 				contractAddress,
 				swapData.preimageHash,
@@ -558,13 +563,6 @@ export class ChainSwapService {
 			);
 
 			if (eventParams) {
-				console.log('✅ Using actual Lockup event parameters:', {
-					amount: eventParams.amount.toString() + ' wei',
-					claimAddress: eventParams.claimAddress,
-					refundAddress: eventParams.refundAddress,
-					timelock: eventParams.timelock
-				});
-
 				amountWei = eventParams.amount;
 				refundAddress = eventParams.refundAddress;
 				timelock = eventParams.timelock;
@@ -585,7 +583,6 @@ export class ChainSwapService {
 		const contract = new Contract(contractAddress, EtherSwapArtifact.abi, wallet);
 
 		// Call claim function
-		console.log('📝 Submitting claim transaction...');
 		const tx = await contract.claim(
 			`0x${preimage.toString('hex')}`,
 			amountWei,
@@ -593,9 +590,7 @@ export class ChainSwapService {
 			timelock
 		);
 
-		console.log('⏳ Waiting for claim transaction confirmation...');
 		const receipt = await tx.wait();
-		console.log('✅ Claim transaction confirmed:', receipt.hash);
 
 		// Update swap data
 		swapData.claimTxHash = receipt.hash;
@@ -731,8 +726,3 @@ export class ChainSwapService {
 		return result;
 	}
 }
-
-// Example usage:
-// import { ChainSwapService } from '@bittasker/wallet-core';
-// const chainSwapService = new ChainSwapService('testnet', myStorageAdapter);
-

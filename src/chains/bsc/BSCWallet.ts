@@ -282,7 +282,6 @@ export class BSCWallet {
 
         return await loadBSCTransactions(
             this.wallet.address,
-            this.config.network,
             this.config.bscscanApiKey
         );
     }
