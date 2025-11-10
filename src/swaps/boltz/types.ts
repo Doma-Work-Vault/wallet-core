@@ -5,6 +5,8 @@
  * @see https://api.docs.boltz.exchange/api-v2.html
  */
 
+import type { Signer } from 'ethers';
+
 /**
  * All possible swap status states from Boltz API
  */
@@ -54,15 +56,6 @@ export interface SwapStatus {
 // Swap Creation Types
 // ============================================================================
 
-export interface SwapLimits {
-	minimal: number;
-	maximal: number;
-}
-
-export interface SwapPairs {
-	[pair: string]: SwapLimits;
-}
-
 export interface SwapFees {
 	percentage: number;
 	miner: {
@@ -75,57 +68,128 @@ export interface SwapFees {
 }
 
 // ============================================================================
-// Submarine Swap Types (Lightning → Bitcoin)
+// Submarine Swap Types (Chain → Lightning)
 // ============================================================================
 
-export interface CreateSwapRequest {
+/**
+ * Submarine swap status type
+ * User locks funds on-chain FIRST, then Boltz pays Lightning invoice
+ */
+export type SubmarineSwapStatus =
+	| 'swap.created'              // Swap created, waiting for user lockup
+	| 'transaction.mempool'       // User's lockup in mempool
+	| 'transaction.confirmed'     // User's lockup confirmed
+	| 'invoice.pending'           // Boltz paying invoice
+	| 'invoice.paid'              // Invoice paid successfully
+	| 'transaction.claimed'       // Boltz claimed funds
+	| 'swap.expired'              // Timeout reached
+	| 'swap.refunded'             // User refunded
+	| 'transaction.failed';       // Swap failed
+
+/**
+ * Submarine swap data for storage and tracking
+ * Supports RBTC, BTC, and L-BTC to Lightning swaps
+ */
+export interface SubmarineSwapData {
+	id: string;
 	type: 'submarine';
-	pairId: string;
-	orderSide: 'sell';
+
+	// Invoice details
 	invoice: string;
-	refundPublicKey: string;
-	referralId?: string;
-}
-
-export interface CreateSwapResponse {
-	id: string;
-	address: string;
-	redeemScript: string;
-	acceptZeroConf: boolean;
-	expectedAmount: number;
-	timeoutBlockHeight: number;
-	blindingKey?: string; // For Liquid
-}
-
-// ============================================================================
-// Reverse Swap Types (Bitcoin → Lightning)
-// ============================================================================
-
-export interface CreateReverseSwapRequest {
-	type: 'reversesubmarine';
-	pairId: string;
-	orderSide: 'buy';
 	invoiceAmount: number;
-	preimageHash: string;
-	claimPublicKey: string;
-	referralId?: string;
-	claimAddress?: string; // Optional RBTC address for direct claiming
-}
 
-export interface CreateReverseSwapResponse {
-	id: string;
-	invoice: string;
-	redeemScript: string;
+	// Lockup details (chain-specific)
+	fromAsset: 'RBTC' | 'BTC' | 'L-BTC';
+	fromAmount: number;
 	lockupAddress: string;
-	onchainAmount: number;
+	lockupTxHash?: string;
+
+	// Refund details
+	refundPublicKey?: string; // For BTC/L-BTC
+	refundPrivateKey?: string; // Encrypted, for BTC/L-BTC
+	refundTxHash?: string; // Refund transaction hash
 	timeoutBlockHeight: number;
-	blindingKey?: string; // For Liquid
+
+	// EVM-specific (RBTC)
+	claimAddress?: string; // Boltz's claim address
+	preimageHash?: string; // Boltz's preimage hash
+
+	// UTXO-specific (BTC/L-BTC)
+	swapTree?: any; // For Taproot swaps
+
+	// Status tracking
+	status: SubmarineSwapStatus;
+	createdAt: number;
+	updatedAt: number;
+	expiresAt: number;
+
+	// Metadata
+	expectedAmount: number;
+	acceptZeroConf: boolean;
+	blindingKey?: string; // For L-BTC
+	bip21?: string; // Payment URI for UTXO chains
+	rifRelayUsed?: boolean; // Track if RIF Relay was used for gasless refunds (RBTC only)
 }
 
-// ============================================================================
-// Chain Swap Types (L-BTC → RBTC)
-// ============================================================================
+/**
+ * Parameters for creating a submarine swap
+ */
+export interface CreateSubmarineSwapParams {
+	// Asset pair
+	from: 'RBTC' | 'BTC' | 'L-BTC';
+	to: 'BTC'; // Lightning (represented as BTC in Boltz API)
 
+	// Invoice to be paid
+	invoice: string;
+
+	// Refund key (required for BTC/L-BTC, not for RBTC)
+	refundPublicKey?: string;
+
+	// Optional referral ID
+	referralId?: string;
+}
+
+/**
+ * Result from creating a submarine swap
+ */
+export interface SubmarineSwapResult {
+	swapId: string;
+	swapData: SubmarineSwapData;
+	// For RBTC: user needs to call lockFundsEVM()
+	// For BTC/L-BTC: user needs to send to lockupAddress
+}
+
+/**
+ * Submarine swap pairs from Boltz API
+ */
+export interface SwapPairs {
+	[fromAsset: string]: {
+		[toAsset: string]: {
+			hash: string;
+			rate: number;
+			limits: {
+				minimal: number;
+				maximal: number;
+				maximalZeroConf: number;
+			};
+			fees: {
+				minerFees: number;
+				percentage: number;
+			};
+		};
+	};
+}
+
+/**
+ * Lockup information for UTXO chains (BTC, L-BTC)
+ */
+export interface LockupInfo {
+	address: string;
+	amount: number;
+	bip21?: string;
+	blindingKey?: string; // For L-BTC
+	timeoutBlockHeight: number;
+}
 /**
  * Chain swap request for L-BTC to RBTC swaps
  * 
@@ -248,23 +312,6 @@ export interface ContractAddresses {
 // Event & Monitoring Types
 // ============================================================================
 
-/**
- * Swap monitoring interface for active swap tracking
- */
-export interface SwapMonitor {
-	swapId: string;
-	type: 'submarine' | 'reversesubmarine';
-	status: SwapStatusType;
-	createdAt: Date;
-	updatedAt: Date;
-	pairId: string;
-	amount: number;
-	onchainAddress?: string;
-	invoice?: string;
-	preimageHash?: string;
-	timeoutBlockHeight: number;
-	failureReason?: string;
-}
 
 /**
  * Event emitted when swap status changes
@@ -281,76 +328,6 @@ export interface SwapEvent {
  * Callback type for swap event listeners
  */
 export type SwapEventCallback = (event: SwapEvent) => void;
-
-// ============================================================================
-// Taproot/MuSig2 Types (Bitcoin UTXO swaps only, not used for RBTC)
-// ============================================================================
-
-/**
- * Cooperative claim details for Taproot swaps
- * 
- * Note: These types are for Bitcoin UTXO swaps. RBTC uses EtherSwap contracts.
- */
-export interface CooperativeClaimDetails {
-	musig: any;
-	transaction: any;
-	partialSignature?: string;
-}
-
-export interface CooperativeClaimRequest {
-	partialSignature: string;
-	preimage?: string;
-	transaction?: any;
-}
-
-export interface CooperativeClaimResponse {
-	transactionId: string;
-	transactionHex: string;
-}
-
-export interface CooperativeRefundRequest {
-	transaction: any;
-}
-
-export interface CooperativeRefundResponse {
-	partialSignature: string;
-}
-
-// ============================================================================
-// Emergency Recovery Types (Bitcoin UTXO only)
-// ============================================================================
-
-/**
- * Refund file data for emergency recovery
- * 
- * Note: Used for Bitcoin UTXO swaps, not applicable to RBTC/EVM swaps
- */
-export interface RefundFileData {
-	id: string;
-	currency: string;
-	redeemScript: string;
-	privateKey: string;
-	timeoutBlockHeight: number;
-}
-
-export interface EmergencyRefundParams {
-	refundData: RefundFileData;
-	destinationAddress: string;
-	feeRate: number;
-	lockupTransaction: any;
-	outputIndex: number;
-}
-
-export interface PreimageClaimParams {
-	swapId: string;
-	preimage: string;
-	destinationAddress: string;
-	lockupTransaction: any;
-	outputIndex: number;
-	redeemScript: string;
-	claimPrivateKey: string;
-	feeRate: number;
-}
 
 // ============================================================================
 // Boltz Swap Types
@@ -414,4 +391,111 @@ export interface ChainSwapData {
 	updatedAt: number;
 	expiresAt: number;
 	rifRelayUsed?: boolean; // Track if RIF Relay was used for gasless claiming
+}
+
+// ============================================================================
+// EVM Contract Service Types
+// ============================================================================
+
+export interface EvmLockupParams {
+	signer: Signer;
+	preimageHash: string;
+	claimAddress: string;
+	timeoutBlockHeight: number;
+	amountSats: number;
+}
+
+export interface EvmLockupResult {
+	txHash: string;
+	contractAddress: string;
+}
+
+export interface EvmClaimParams {
+	signer: Signer;
+	preimage: string;
+	amount: number; // in satoshis
+	refundAddress: string;
+	timelock: number;
+}
+
+export interface EvmClaimResult {
+	txHash: string;
+}
+
+export interface EvmRefundParams {
+	signer: Signer;
+	preimageHash: string;
+	amount: number; // in satoshis
+	claimAddress: string;
+	timelock: number;
+}
+
+export interface EvmRefundResult {
+	txHash: string;
+}
+
+export interface LockupEventParams {
+	amount: bigint;
+	claimAddress: string;
+	refundAddress: string;
+	timelock: number;
+}
+
+// ============================================================================
+// Chain Swap Refund Types
+// ============================================================================
+
+export interface ChainSwapRefundCheck {
+	refundable: boolean;
+	reason?: string;
+	currentBlockHeight?: number;
+}
+
+export interface ChainSwapRefundParams {
+	swapId: string;
+	refundAddress: string; // L-BTC address to send refund to
+}
+
+export interface ChainSwapRefundResult {
+	txHash: string;
+	swapData: ChainSwapData;
+}
+
+// ============================================================================
+// Submarine Swap Refund Types
+// ============================================================================
+
+export interface SubmarineRefundCheck {
+	refundable: boolean;
+	reason?: string;
+	currentBlockHeight?: number;
+}
+
+export interface SubmarineRefundParams {
+	swapId: string;
+	refundAddress?: string; // Optional: For BTC/L-BTC. For RBTC, uses wallet address
+	signer?: Signer; // Required for RBTC refunds
+}
+
+export interface SubmarineRefundResult {
+	txHash: string;
+	swapData: SubmarineSwapData;
+}
+
+// ============================================================================
+// RIF Relay Types
+// ============================================================================
+
+export interface RifRelayClaimParams {
+	// Wallet signer (EOA that owns the Smart Wallet)
+	walletSigner: Signer;
+
+	// EtherSwap contract address
+	contractAddress: string;
+
+	// Swap parameters (from Lockup event or API)
+	preimage: string;
+	amount: number; // in satoshis
+	refundAddress: string;
+	timelock: number;
 }

@@ -20,6 +20,7 @@ import { RSKWallet } from '../chains/rsk/RSKWallet';
 import { BSCWallet } from '../chains/bsc/BSCWallet';
 import { ChainSwapService } from '../swaps/boltz/ChainSwapService';
 import { ReverseSwapService } from '../swaps/boltz/ReverseSwapService';
+import { SubmarineSwapService } from '../swaps/boltz/SubmarineSwapService';
 import { BoltzWebSocket } from '../swaps/boltz/WebSocketClient';
 
 export interface WalletManagerConfig {
@@ -59,6 +60,10 @@ export interface SwapLimits {
 		minimal: number;
 		maximal: number;
 	};
+	submarine: {
+		minimal: number;
+		maximal: number;
+	};
 }
 
 /**
@@ -70,6 +75,7 @@ export class WalletManager {
 	private _bscWallet: BSCWallet | null = null;
 	private _reverseSwapService: ReverseSwapService | null = null;
 	private _chainSwapService: ChainSwapService | null = null;
+	private _submarineSwapService: SubmarineSwapService | null = null;
 	private _websocket: BoltzWebSocket | null = null;
 	
 	constructor(config: WalletManagerConfig) {
@@ -84,12 +90,15 @@ export class WalletManager {
 		// Initialize swap services if storage is provided
 		if (config.swapStorage) {
 			this._reverseSwapService = new ReverseSwapService(
-				config.network, 
 				config.swapStorage,
 				this._websocket
 			);
 			this._chainSwapService = new ChainSwapService(
-				config.network, 
+				config.swapStorage,
+				this._websocket,
+				this.config.network
+			);
+			this._submarineSwapService = new SubmarineSwapService(
 				config.swapStorage,
 				this._websocket
 			);
@@ -188,6 +197,16 @@ export class WalletManager {
 	}
 	
 	/**
+	 * Get submarine swap service (RBTC/BTC/L-BTC → Lightning)
+	 */
+	get submarineSwapService(): SubmarineSwapService {
+		if (!this._submarineSwapService) {
+			throw new Error('Swap storage not configured. Provide swapStorage in config.');
+		}
+		return this._submarineSwapService;
+	}
+	
+	/**
 	 * Get all wallet balances
 	 */
 	async getBalances(): Promise<WalletBalances> {
@@ -212,10 +231,12 @@ export class WalletManager {
 	async getSwapLimits(): Promise<SwapLimits> {
 		const lightningLimits = await this.reverseSwapService.getSwapLimits();
 		const liquidLimits = await this.chainSwapService.getSwapLimits();
+		const submarineLimits = await this.submarineSwapService.getSwapLimits('RBTC', 'BTC');
 		
 		return {
 			lightning: lightningLimits,
-			liquid: liquidLimits
+			liquid: liquidLimits,
+			submarine: submarineLimits
 		};
 	}
 	

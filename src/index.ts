@@ -55,19 +55,55 @@ export type { WalletManagerConfig, WalletBalances, SwapLimits } from './core/Wal
 export { BoltzClient, getLockupEventParameters } from './swaps/boltz/BoltzClient';
 export { ReverseSwapService } from './swaps/boltz/ReverseSwapService';
 export { ChainSwapService } from './swaps/boltz/ChainSwapService';
+export { SubmarineSwapService } from './swaps/boltz/SubmarineSwapService';
 export { BoltzWebSocket } from './swaps/boltz/WebSocketClient';
 export type { SwapStorage } from './swaps/boltz/storage';
 
-// Boltz types
+// Refund services
+export { ChainSwapRefundService } from './swaps/boltz/ChainSwapRefundService';
+export { SubmarineSwapRefundService } from './swaps/boltz/SubmarineSwapRefundService';
+
+export { EvmContractService } from './swaps/boltz/EvmContractService';
 export type {
+    // Chain refund service
+    ChainSwapRefundCheck,
+    ChainSwapRefundParams,
+    ChainSwapRefundResult,
+
+    // Submarine refund service
+    SubmarineRefundCheck,
+    SubmarineRefundParams,
+    SubmarineRefundResult,
+
+    // Evm contract service
+    EvmLockupParams,
+    EvmLockupResult,
+    EvmClaimParams,
+    EvmClaimResult,
+    EvmRefundParams,
+    EvmRefundResult,
+    LockupEventParams,
+
+    // RIF Relay service
+    RifRelayClaimParams,
+
+    // Boltz swap types
     BoltzSwapData,
     ChainSwapData,
+    SubmarineSwapData,
     SwapStatus,
     ChainSwapStatus,
+    SubmarineSwapStatus,
     SwapEvent,
-    CreateSwapResponse,
-    ContractAddresses
+    ContractAddresses,
+    CreateSubmarineSwapParams,
+    SubmarineSwapResult,
+    SwapPairs,
+    LockupInfo,
 } from './swaps/boltz/types';
+
+// RIF Relay gasless claiming service
+export { RifRelayClaimService } from './swaps/boltz/RifRelayClaimService';
 
 // RIF Relay - Gasless transactions
 export { relayClaimTransaction, getSmartWalletAddress } from './swaps/rif/Signer';

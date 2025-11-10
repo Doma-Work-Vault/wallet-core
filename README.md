@@ -9,7 +9,10 @@ Multi-chain Bitcoin wallet SDK for RSK (Rootstock), BSC (Binance Smart Chain), L
 
 - 🔐 **HD Wallet Support**: BIP39/BIP44 mnemonic-based wallets
 - ⚡ **Multi-Chain**: RSK, BSC, Lightning, Liquid
-- 🔄 **Atomic Swaps**: Lightning → RBTC, L-BTC → RBTC via Boltz
+- 🔄 **Atomic Swaps**: 
+  - Lightning → RBTC (Reverse Swaps)
+  - L-BTC → RBTC (Chain Swaps)
+  - RBTC/BTC/L-BTC → Lightning (Submarine Swaps)
 - 💸 **Gasless Transactions**: RIF Relay integration for zero-gas RBTC claims
 - 🌐 **Framework Agnostic**: Pure TypeScript, works with any framework
 - 📱 **Mobile Ready**: Optimized for React Native, Capacitor, Ionic
@@ -248,14 +251,62 @@ console.log('Swap ID:', swap.swapId);
 const status = await walletManager.chainSwapService.getSwapStatus(swap.swapId);
 ```
 
+### Submarine Swaps
+
+Swap RBTC (or BTC/L-BTC) to Lightning:
+
+```typescript
+// Get available submarine swap pairs
+const pairs = await walletManager.submarineSwapService.getSubmarineSwapPairs();
+console.log('Available pairs:', pairs);
+
+// Create submarine swap with Lightning invoice
+const invoice = 'lnbc...'; // Lightning invoice to be paid
+
+const { swapId, swapData } = await walletManager.submarineSwapService.createSubmarineSwap({
+  from: 'RBTC',
+  to: 'BTC', // Lightning (represented as BTC in Boltz API)
+  invoice: invoice
+});
+
+console.log('Swap created:', swapId);
+console.log('Expected amount:', swapData.fromAmount, 'sats');
+
+// Lock RBTC in EtherSwap contract
+const rskWallet = walletManager.getRSKWallet();
+const { txHash } = await walletManager.submarineSwapService.lockFundsEVM(
+  swapData,
+  rskWallet
+);
+
+console.log('✅ Funds locked! Transaction:', txHash);
+console.log('Boltz will now pay the Lightning invoice');
+
+// Monitor swap status
+const currentSwap = walletManager.submarineSwapService.getSwap(swapId);
+console.log('Current status:', currentSwap?.status);
+// Possible statuses:
+// - 'swap.created': Waiting for lockup
+// - 'transaction.mempool': Lockup detected
+// - 'transaction.confirmed': Lockup confirmed
+// - 'invoice.paid': Boltz paid the invoice ✅
+```
+
 ### Get Swap Limits
 
 ```typescript
 const limits = await walletManager.getSwapLimits();
-console.log('Lightning min:', limits.lightning.minimal, 'sats');
-console.log('Lightning max:', limits.lightning.maximal, 'sats');
-console.log('Liquid min:', limits.liquid.minimal, 'sats');
-console.log('Liquid max:', limits.liquid.maximal, 'sats');
+console.log('Reverse swap (Lightning → RBTC):');
+console.log('  Min:', limits.lightning.minimal, 'sats');
+console.log('  Max:', limits.lightning.maximal, 'sats');
+
+console.log('Chain swap (L-BTC → RBTC):');
+console.log('  Min:', limits.liquid.minimal, 'sats');
+console.log('  Max:', limits.liquid.maximal, 'sats');
+
+console.log('Submarine swap (RBTC → Lightning):');
+console.log('  Min:', limits.submarine.minimal, 'sats');
+console.log('  Max:', limits.submarine.maximal, 'sats');
 ```
 
 ## Network Configuration

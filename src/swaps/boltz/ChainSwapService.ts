@@ -37,45 +37,42 @@
  * - transaction.claimed: We claimed RBTC ✅
  */
 
-import type { SwapEvent, ChainSwapStatus, ChainSwapData } from './types';
-import { crypto } from 'bitcoinjs-lib';
-import { randomBytes } from 'crypto';
-import { BoltzClient, getLockupEventParameters } from './BoltzClient';
-import { BoltzWebSocket } from './WebSocketClient';
-import { Contract, ethers } from 'ethers';
-import { ECPairFactory } from 'ecpair';
-import * as ecc from 'tiny-secp256k1';
-import { relayClaimTransaction, getSmartWalletAddress } from '../rif/Signer';
-import { isRifRelayAvailable, getLiquidAssetId } from '../../utils/networkConfig';
-import EtherSwapArtifact from 'boltz-core/out/EtherSwap.sol/EtherSwap.json';
-import type { NetworkType } from '../../core/types';
 import type { SwapStorage } from './storage';
-// Note: Refund service not yet migrated - L-BTC refunds require liquidjs-lib which has browser compatibility issues
+import type { NetworkType } from '../../core/types';
+import type { SwapEvent, ChainSwapStatus, ChainSwapData } from './types';
+import { ethers } from 'ethers';
+import { randomBytes } from 'crypto';
+import { ECPairFactory } from 'ecpair';
+import { crypto } from 'bitcoinjs-lib';
+import { BoltzClient } from './BoltzClient';
+import { BoltzWebSocket } from './WebSocketClient';
+import { getSmartWalletAddress } from '../rif/Signer';
+import { EvmContractService } from './EvmContractService';
+import { RifRelayClaimService } from './RifRelayClaimService';
+import { ChainSwapRefundService } from './ChainSwapRefundService';
+import { getLiquidAssetId, isRifRelayAvailable, weiToSatoshi } from '../../utils/networkConfig';
+import * as ecc from 'tiny-secp256k1';
 
 const ECPair = ECPairFactory(ecc);
 
 export class ChainSwapService {
 	private boltzClient: BoltzClient;
-	// private refundService: ChainSwapRefundService;
-	private refundService: any;
+	private evmContractService: EvmContractService;
+	private rifRelayService: RifRelayClaimService;
+	private refundService: ChainSwapRefundService;
 	private websocket: BoltzWebSocket;
 	private activeSwaps: Map<string, ChainSwapData> = new Map();
 	private walletGetter: (() => any) | null = null;
 	private storage?: SwapStorage;
 	private claimingSwaps: Set<string> = new Set();
 
-	constructor(network: NetworkType = 'testnet', storage?: SwapStorage, websocket?: BoltzWebSocket) {
-		this.boltzClient = new BoltzClient(network);
+	constructor(storage: SwapStorage, websocket: BoltzWebSocket, network: NetworkType = 'testnet') {
+		this.boltzClient = new BoltzClient();
+		this.evmContractService = new EvmContractService(this.boltzClient);
+		this.rifRelayService = new RifRelayClaimService();
+		this.refundService = new ChainSwapRefundService(this.boltzClient, network);
 		this.storage = storage;
-		// this.refundService = new ChainSwapRefundService(network, this.boltzClient);
-
-		// Use provided WebSocket or create a new one (for backwards compatibility)
-		if (websocket) {
-			this.websocket = websocket;
-		} else {
-			const { getWebSocketEndpoint } = require('../../utils/networkConfig');
-			this.websocket = new BoltzWebSocket(getWebSocketEndpoint(network));
-		}
+		this.websocket = websocket;
 	}
 
 	/**
@@ -428,19 +425,8 @@ export class ChainSwapService {
 				throw new Error('Claim already in progress');
 			}
 
-			// Get preimage
-			const preimage = swapData.preimage;
-
-			// Get EtherSwap contract address from Boltz API
-			const contracts = await this.boltzClient.getContractAddresses();
-			const etherSwapAddress = (contracts as any).rsk?.swapContracts?.EtherSwap;
-
-			if (!etherSwapAddress) {
-				console.error('❌ Contract addresses:', contracts);
-				throw new Error('RBTC EtherSwap contract address not found');
-			}
-
-			const etherSwapContract = new Contract(etherSwapAddress, EtherSwapArtifact.abi, wallet);
+			// Get EtherSwap contract address
+			const etherSwapAddress = await this.evmContractService.getEtherSwapAddress();
 
 			// Get ACTUAL lockup parameters from blockchain transaction
 			// This is MORE RELIABLE than API values
@@ -448,17 +434,17 @@ export class ChainSwapService {
 			let refundAddress: string;
 			let timelock: number;
 
-			if (swapData.serverLockupTxHash) {
-				const eventParams = await getLockupEventParameters(
-					etherSwapAddress,
+			if (swapData.serverLockupTxHash && wallet.provider) {
+				const eventParams = await this.evmContractService.getLockupEventParameters(
 					swapData.preimageHash,
 					swapData.serverLockupTxHash,
-					wallet.provider
+					wallet.provider,
+					etherSwapAddress
 				);
 
 				if (eventParams) {
-					// Convert from wei to sats for RIF Relay
-					amount = Number(eventParams.amount / 10000000000n);
+					// Convert from wei to sats
+					amount = weiToSatoshi(eventParams.amount);
 					refundAddress = eventParams.refundAddress;
 					timelock = eventParams.timelock;
 				} else {
@@ -474,18 +460,18 @@ export class ChainSwapService {
 				timelock = swapData.claimTimeoutBlockHeight;
 			}
 
-			// Use RIF Relay to claim
-			const claimTxHash = await relayClaimTransaction(
-				wallet,
-				etherSwapContract as any,
-				preimage,
+			// Use RifRelayClaimService for gasless claim
+			const txHash = await this.rifRelayService.claimViaRifRelay({
+				walletSigner: wallet,
+				contractAddress: etherSwapAddress,
+				preimage: swapData.preimage,
 				amount,
 				refundAddress,
 				timelock
-			);
+			});
 
 			// Update swap data - PENDING status
-			swapData.claimTxHash = claimTxHash;
+			swapData.claimTxHash = txHash;
 			swapData.status = 'transaction.claim.pending';
 			swapData.rifRelayUsed = true;
 			swapData.updatedAt = Date.now();
@@ -495,7 +481,7 @@ export class ChainSwapService {
 
 			// Wait for confirmation
 			if (wallet.provider) {
-				await wallet.provider.waitForTransaction(claimTxHash);
+				await this.rifRelayService.waitForConfirmation(txHash, wallet.provider);
 			}
 
 			// Now mark as claimed
@@ -536,68 +522,51 @@ export class ChainSwapService {
 			throw new Error('Claim already in progress');
 		}
 
-		// Get preimage
-		const preimage = Buffer.from(swapData.preimage, 'hex');
-
-		// Get EtherSwap contract address from Boltz API
-		const contracts = await this.boltzClient.getContractAddresses();
-		const contractAddress = (contracts as any).rsk?.swapContracts?.EtherSwap;
-
-		if (!contractAddress) {
-			console.error('❌ Contract addresses:', contracts);
-			throw new Error('RBTC EtherSwap contract address not found');
-		}
-
 		// Get ACTUAL lockup parameters from blockchain transaction
 		// This is MORE RELIABLE than API values
-		let amountWei: bigint;
+		let amount: number;
 		let refundAddress: string;
 		let timelock: number;
 
-		if (swapData.serverLockupTxHash) {
-			const eventParams = await getLockupEventParameters(
-				contractAddress,
+		if (swapData.serverLockupTxHash && wallet.provider) {
+			const eventParams = await this.evmContractService.getLockupEventParameters(
 				swapData.preimageHash,
 				swapData.serverLockupTxHash,
 				wallet.provider
 			);
 
 			if (eventParams) {
-				amountWei = eventParams.amount;
+				amount = weiToSatoshi(eventParams.amount);
 				refundAddress = eventParams.refundAddress;
 				timelock = eventParams.timelock;
 			} else {
 				console.warn('⚠️ Lockup event not found, using API values (may fail)');
-				amountWei = BigInt(swapData.toAmount) * BigInt(10000000000); // sats to wei
+				amount = swapData.toAmount; // in satoshis
 				refundAddress = swapData.refundAddress;
 				timelock = swapData.claimTimeoutBlockHeight;
 			}
 		} else {
 			console.warn('⚠️ No lockup TX hash, using API values (may fail)');
-			amountWei = BigInt(swapData.toAmount) * BigInt(10000000000); // sats to wei
+			amount = swapData.toAmount;
 			refundAddress = swapData.refundAddress;
 			timelock = swapData.claimTimeoutBlockHeight;
 		}
 
-		// Create contract instance
-		const contract = new Contract(contractAddress, EtherSwapArtifact.abi, wallet);
-
-		// Call claim function
-		const tx = await contract.claim(
-			`0x${preimage.toString('hex')}`,
-			amountWei,
+		// Use EvmContractService to claim funds
+		const result = await this.evmContractService.claimFunds({
+			signer: wallet,
+			preimage: swapData.preimage,
+			amount,
 			refundAddress,
 			timelock
-		);
-
-		const receipt = await tx.wait();
+		});
 
 		// Update swap data
-		swapData.claimTxHash = receipt.hash;
+		swapData.claimTxHash = result.txHash;
 		swapData.status = 'transaction.claimed';
 		swapData.updatedAt = Date.now();
 
-		// Save to Nostr using shared module
+		// Save to storage
 		if (this.storage) {
 			await this.storage.save(swapData.id, swapData);
 		}

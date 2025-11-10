@@ -4,7 +4,7 @@
  * Reference: http://api.docs.boltz.exchange/api-v2.html#websocket
  */
 
-import type { SwapStatusType, SwapEvent } from './types';
+import type { SwapEvent } from './types';
 
 interface WebSocketMessage {
 	op?: string;
@@ -160,7 +160,7 @@ export class BoltzWebSocket {
 
 		const swapUpdate = message.args[0];
 		const swapId = swapUpdate.id;
-		const status = swapUpdate.status as SwapStatusType;
+		const status = swapUpdate.status;
 
 		const callback = this.callbacks.get(swapId);
 		if (callback) {
