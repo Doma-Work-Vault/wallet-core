@@ -35,10 +35,12 @@ import type {
 	ClaimSwapRequest,
 	ClaimSwapResponse,
 	BroadcastTransactionRequest,
-	BroadcastTransactionResponse
+	BroadcastTransactionResponse,
+	SubmarineCreatedResponse,
+	TransactionInterface
 } from './types';
 import { Buffer } from 'buffer';
-import { Interface } from 'ethers';
+import { Interface, ethers } from 'ethers';
 import { getBoltzConfig } from '../../utils/networkConfig';
 import EtherSwapArtifact from 'boltz-core/out/EtherSwap.sol/EtherSwap.json';
 
@@ -71,7 +73,7 @@ export class BoltzClient {
 	async getSubmarineSwapPairs(): Promise<SwapPairs> {
 		try {
 			const response = await this.request('GET', '/v2/swap/submarine');
-			return response.pairs || {};
+			return response;
 		} catch (error) {
 			console.error('Failed to get swap pairs:', error);
 			throw new BoltzError(
@@ -80,6 +82,41 @@ export class BoltzClient {
 			);
 		}
 	}
+
+	/**
+	 * Get reverse swap pairs (Lightning → RBTC)
+	 * Returns available reverse swap pairs with limits and fees
+	 */
+	async getReverseSwapPairs(): Promise<SwapPairs> {
+		try {
+			const response = await this.request('GET', '/v2/swap/reverse');
+			return response;
+		} catch (error) {
+			console.error('Failed to get reverse swap pairs:', error);
+			throw new BoltzError(
+				'Reverse swap pairs request failed: ' + (error instanceof Error ? error.message : 'Unknown error'),
+				'REVERSE_PAIRS_ERROR'
+			);
+		}
+	}
+
+	/**
+	 * Get chain swap pairs (L-BTC → RBTC, etc.)
+	 * Returns available chain-to-chain swap pairs with limits and fees
+	 */
+	async getChainSwapPairs(): Promise<SwapPairs> {
+		try {
+			const response = await this.request('GET', '/v2/swap/chain');
+			return response;
+		} catch (error) {
+			console.error('Failed to get chain swap pairs:', error);
+			throw new BoltzError(
+				'Chain swap pairs request failed: ' + (error instanceof Error ? error.message : 'Unknown error'),
+				'CHAIN_PAIRS_ERROR'
+			);
+		}
+	}
+
 
 	/**
 	 * Get swap fees for different pair types
@@ -116,7 +153,7 @@ export class BoltzClient {
 		pairHash: string;
 		refundPublicKey?: string;
 		referralId?: string;
-	}): Promise<any> {
+	}): Promise<SubmarineCreatedResponse> {
 		// Validate inputs
 		if (!params.from || !params.to || !params.invoice || !params.pairHash) {
 			throw new BoltzError('Missing required parameters for submarine swap', 'INVALID_PARAMS');
@@ -145,18 +182,14 @@ export class BoltzClient {
 			}
 		}
 
-		const requestBody: any = {
+		const requestBody = {
 			from: params.from,
 			to: params.to,
 			invoice: params.invoice,
 			pairHash: params.pairHash,
-			referralId: params.referralId || ''
+			referralId: params.referralId || '',
+			...(params.refundPublicKey && { refundPublicKey: params.refundPublicKey })
 		};
-
-		// Only include refundPublicKey if provided (not needed for RBTC)
-		if (params.refundPublicKey) {
-			requestBody.refundPublicKey = params.refundPublicKey;
-		}
 
 		try {
 			const response = await this.request('POST', '/v2/swap/submarine', requestBody);
@@ -183,41 +216,6 @@ export class BoltzClient {
 			throw new BoltzError(
 				'Submarine swap creation failed: ' + (error instanceof Error ? error.message : 'Unknown error'),
 				'SUBMARINE_SWAP_ERROR'
-			);
-		}
-	}
-
-
-	/**
-	 * Get reverse swap pairs (Lightning → RBTC)
-	 * Returns available reverse swap pairs with limits and fees
-	 */
-	async getReverseSwapPairs(): Promise<any> {
-		try {
-			const response = await this.request('GET', '/v2/swap/reverse');
-			return response;
-		} catch (error) {
-			console.error('Failed to get reverse swap pairs:', error);
-			throw new BoltzError(
-				'Reverse swap pairs request failed: ' + (error instanceof Error ? error.message : 'Unknown error'),
-				'REVERSE_PAIRS_ERROR'
-			);
-		}
-	}
-
-	/**
-	 * Get chain swap pairs (L-BTC → RBTC, etc.)
-	 * Returns available chain-to-chain swap pairs with limits and fees
-	 */
-	async getChainSwapPairs(): Promise<any> {
-		try {
-			const response = await this.request('GET', '/v2/swap/chain');
-			return response;
-		} catch (error) {
-			console.error('Failed to get chain swap pairs:', error);
-			throw new BoltzError(
-				'Chain swap pairs request failed: ' + (error instanceof Error ? error.message : 'Unknown error'),
-				'CHAIN_PAIRS_ERROR'
 			);
 		}
 	}
@@ -531,7 +529,7 @@ export class BoltzClient {
 		swapId: string,
 		swapType: 'submarine' | 'chain',
 		publicNonce: Buffer,
-		refundTransaction: any,
+		refundTransaction: TransactionInterface,
 		index: number
 	): Promise<{
 		pubNonce: Buffer;
@@ -708,7 +706,7 @@ export async function getLockupEventParameters(
 	contractAddress: string,
 	preimageHash: string,
 	lockupTxHash: string,
-	provider: any
+	provider: ethers.Provider
 ): Promise<{
 	amount: bigint;
 	claimAddress: string;

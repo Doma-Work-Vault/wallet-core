@@ -2,6 +2,7 @@
  * Boltz Exchange API Types
  * Type definitions for Boltz REST API v2 and swap operations
  * 
+ * Based on boltz-web-app implementation
  * @see https://api.docs.boltz.exchange/api-v2.html
  */
 
@@ -111,8 +112,14 @@ export interface SubmarineSwapData {
 	timeoutBlockHeight: number;
 
 	// EVM-specific (RBTC)
-	claimAddress?: string; // Boltz's claim address
-	preimageHash?: string; // Boltz's preimage hash
+	claimAddress?: string; // Boltz's claim address (only for RBTC)
+	
+	/**
+	 * Payment hash from the Lightning invoice
+	 * NOT returned by Boltz API - must be decoded from the invoice using BOLT11 decoder
+	 * Optional because it needs to be extracted after swap creation
+	 */
+	preimageHash?: string;
 
 	// UTXO-specific (BTC/L-BTC)
 	swapTree?: any; // For Taproot swaps
@@ -189,6 +196,54 @@ export interface LockupInfo {
 	bip21?: string;
 	blindingKey?: string; // For L-BTC
 	timeoutBlockHeight: number;
+}
+
+// ============================================================================
+// Boltz API Response Types
+// ============================================================================
+
+/**
+ * Transaction interface for Bitcoin/Liquid transactions
+ * Used in refund/claim operations
+ * TODO: Replace Transaction | LiquidTransaction
+ */
+export type TransactionInterface = any;
+
+/**
+ * Swap tree structure for Taproot swaps
+ */
+export interface SwapTreeLeaf {
+	output: string;
+	version: number;
+}
+
+export interface SwapTree {
+	claimLeaf: SwapTreeLeaf;
+	refundLeaf: SwapTreeLeaf;
+}
+
+/**
+ * Submarine swap creation response from Boltz API
+ * This is what the API actually returns - NOT our internal storage type
+ * 
+ * IMPORTANT: preimageHash is NOT returned by the API!
+ * It must be decoded from the Lightning invoice using BOLT11 decoder
+ */
+export interface SubmarineCreatedResponse {
+	id: string;
+	acceptZeroConf: boolean;
+	expectedAmount: number;
+	timeoutBlockHeight: number;
+	
+	// For UTXO chains (BTC, L-BTC) - Taproot swaps
+	address: string;
+	bip21: string;
+	swapTree: SwapTree;
+	claimPublicKey: string;
+	blindingKey?: string; // For L-BTC only
+	
+	// For EVM chains (RBTC)
+	claimAddress?: string;
 }
 /**
  * Chain swap request for L-BTC to RBTC swaps

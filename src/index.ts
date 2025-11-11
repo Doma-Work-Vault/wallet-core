@@ -57,6 +57,7 @@ export { ReverseSwapService } from './swaps/boltz/ReverseSwapService';
 export { ChainSwapService } from './swaps/boltz/ChainSwapService';
 export { SubmarineSwapService } from './swaps/boltz/SubmarineSwapService';
 export { BoltzWebSocket } from './swaps/boltz/WebSocketClient';
+export { InMemorySwapStorage } from './swaps/boltz/storage';
 export type { SwapStorage } from './swaps/boltz/storage';
 
 // Refund services

@@ -64,13 +64,6 @@ export class RifRelayClaimService {
                 throw new Error('RIF Relay is not available on this network');
             }
 
-            console.log('🚀 Claiming RBTC via RIF Relay (gasless):', {
-                contractAddress: params.contractAddress,
-                amount: params.amount,
-                refundAddress: params.refundAddress,
-                timelock: params.timelock
-            });
-
             // Create EtherSwap contract instance
             const etherSwapContract = new Contract(
                 params.contractAddress,
@@ -94,8 +87,6 @@ export class RifRelayClaimService {
                 params.timelock
             );
 
-            console.log('✅ RIF Relay claim transaction submitted:', txHash);
-
             return txHash;
         } catch (error) {
             console.error('❌ RIF Relay claim failed:', error);
@@ -115,9 +106,7 @@ export class RifRelayClaimService {
         provider: ethers.Provider
     ): Promise<ethers.TransactionReceipt | null> {
         try {
-            console.log('⏳ Waiting for RIF Relay transaction confirmation:', txHash);
             const receipt = await provider.waitForTransaction(txHash);
-            console.log('✅ RIF Relay transaction confirmed:', txHash);
             return receipt;
         } catch (error) {
             console.error('Failed to wait for RIF Relay confirmation:', error);

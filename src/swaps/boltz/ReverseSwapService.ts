@@ -60,7 +60,7 @@ export class ReverseSwapService {
 	private storage?: SwapStorage;
 	private claimingSwaps: Set<string> = new Set();
 
-	constructor(storage: SwapStorage, websocket: BoltzWebSocket) {
+	constructor(websocket: BoltzWebSocket, storage?: SwapStorage) {
 		this.boltzClient = new BoltzClient();
 		this.evmContractService = new EvmContractService(this.boltzClient);
 		this.rifRelayService = new RifRelayClaimService();

@@ -128,15 +128,11 @@ export class SubmarineSwapRefundService {
         swapData: SubmarineSwapData,
         params: SubmarineRefundParams
     ): Promise<SubmarineRefundResult> {
-        console.log(`🔄 Starting ${swapData.fromAsset} submarine swap refund for swap:`, params.swapId);
-
         // Check if refundable
         const refundCheck = await this.isSwapRefundable(swapData);
         if (!refundCheck.refundable) {
             throw new Error(`Swap not refundable: ${refundCheck.reason}`);
         }
-
-        console.log('✅ Swap is refundable');
 
         // Route to appropriate refund handler
         if (swapData.fromAsset === 'RBTC') {
@@ -170,8 +166,6 @@ export class SubmarineSwapRefundService {
             throw new Error('Missing claim address for RBTC refund');
         }
 
-        console.log('🔧 Refunding RBTC via EtherSwap contract...');
-
         // Call EtherSwap.refund() via EvmContractService
         const result = await this.evmContractService.refundFunds({
             signer: params.signer,
@@ -204,8 +198,6 @@ export class SubmarineSwapRefundService {
             throw new Error('Refund address is required for BTC refunds');
         }
 
-        console.log('🔧 Refunding BTC via Bitcoin transaction...');
-
         // TODO: Implement Bitcoin refund transaction building
         // Similar to ChainSwapRefundService but for Bitcoin network
         // Steps:
@@ -231,8 +223,6 @@ export class SubmarineSwapRefundService {
         if (!params.refundAddress) {
             throw new Error('Refund address is required for L-BTC refunds');
         }
-
-        console.log('🔧 Refunding L-BTC via Liquid transaction...');
 
         // TODO: Implement L-BTC refund transaction building
         // Can reuse much of ChainSwapRefundService logic

@@ -105,15 +105,6 @@ export class EvmContractService {
                 ? params.preimageHash
                 : '0x' + params.preimageHash;
 
-            console.log('🔒 Locking funds in EtherSwap contract:', {
-                contractAddress,
-                preimageHash: preimageHashWithPrefix,
-                claimAddress: params.claimAddress,
-                timeoutBlockHeight: params.timeoutBlockHeight,
-                amountSats: params.amountSats,
-                amountWei: amountWei.toString()
-            });
-
             // Call EtherSwap.lock() function
             // function lock(bytes32 preimageHash, address claimAddress, uint timelock) external payable
             const tx = await etherSwap.lock(
@@ -125,12 +116,8 @@ export class EvmContractService {
                 }
             );
 
-            console.log('✅ Lockup transaction submitted:', tx.hash);
-
             // Wait for transaction confirmation
             const receipt = await tx.wait();
-
-            console.log('✅ Lockup transaction confirmed:', receipt.hash);
 
             return {
                 txHash: receipt.hash,
@@ -187,15 +174,6 @@ export class EvmContractService {
                 ? params.preimage
                 : '0x' + params.preimage;
 
-            console.log('💰 Claiming funds from EtherSwap contract:', {
-                contractAddress,
-                preimage: preimageWithPrefix,
-                amount: params.amount,
-                amountWei: amountWei.toString(),
-                refundAddress: params.refundAddress,
-                timelock: params.timelock
-            });
-
             // Call EtherSwap.claim() function
             // function claim(bytes32 preimage, uint amount, address refundAddress, uint timelock) external
             const tx = await etherSwap.claim(
@@ -205,12 +183,8 @@ export class EvmContractService {
                 params.timelock
             );
 
-            console.log('✅ Claim transaction submitted:', tx.hash);
-
             // Wait for transaction confirmation
             const receipt = await tx.wait();
-
-            console.log('✅ Claim transaction confirmed:', receipt.hash);
 
             return {
                 txHash: receipt.hash
@@ -271,15 +245,6 @@ export class EvmContractService {
                 ? params.preimageHash
                 : '0x' + params.preimageHash;
 
-            console.log('🔄 Refunding funds from EtherSwap contract:', {
-                contractAddress,
-                preimageHash: preimageHashWithPrefix,
-                amount: params.amount,
-                amountWei: amountWei.toString(),
-                claimAddress: params.claimAddress,
-                timelock: params.timelock
-            });
-
             // Call EtherSwap.refund() function
             // function refund(bytes32 preimageHash, uint amount, address claimAddress, uint timelock) external
             const tx = await etherSwap.refund(
@@ -289,12 +254,8 @@ export class EvmContractService {
                 params.timelock
             );
 
-            console.log('✅ Refund transaction submitted:', tx.hash);
-
             // Wait for transaction confirmation
             const receipt = await tx.wait();
-
-            console.log('✅ Refund transaction confirmed:', receipt.hash);
 
             return {
                 txHash: receipt.hash

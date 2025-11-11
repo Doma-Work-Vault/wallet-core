@@ -49,6 +49,7 @@ import { BoltzClient } from './BoltzClient';
 import { BoltzWebSocket } from './WebSocketClient';
 import { EvmContractService } from './EvmContractService';
 import { SubmarineSwapRefundService } from './SubmarineSwapRefundService';
+import bolt11 from 'bolt11';
 
 export class SubmarineSwapService {
 	private boltzClient: BoltzClient;
@@ -58,7 +59,7 @@ export class SubmarineSwapService {
 	private activeSwaps: Map<string, SubmarineSwapData> = new Map();
 	private storage?: SwapStorage;
 
-	constructor(storage: SwapStorage, websocket: BoltzWebSocket) {
+	constructor(websocket: BoltzWebSocket, storage?: SwapStorage) {
 		this.boltzClient = new BoltzClient();
 		this.storage = storage;
 		this.evmContractService = new EvmContractService(this.boltzClient);
@@ -139,6 +140,17 @@ export class SubmarineSwapService {
 			const blockTime = params.from === 'RBTC' ? 30 : params.from === 'L-BTC' ? 60 : 600;
 			const expiresAt = Date.now() + (swapResponse.timeoutBlockHeight * blockTime * 1000);
 
+			// Decode the invoice to extract the preimage hash (payment hash)
+			const decodedInvoice = bolt11.decode(params.invoice);
+			const paymentHashTag = decodedInvoice.tags.find((tag) => tag.tagName === 'payment_hash');
+
+			if (!paymentHashTag) {
+				throw new Error('Invoice does not contain payment hash');
+			}
+
+			// Convert the payment hash to hex string
+			const preimageHash = Buffer.from(paymentHashTag.data as string, 'hex').toString('hex');
+
 			// Prepare swap data
 			const swapData: SubmarineSwapData = {
 				id: swapResponse.id,
@@ -158,7 +170,7 @@ export class SubmarineSwapService {
 				// Chain-specific fields
 				refundPublicKey: params.refundPublicKey,
 				claimAddress: swapResponse.claimAddress, // For RBTC
-				preimageHash: swapResponse.preimageHash, // Boltz's preimage hash
+				preimageHash,
 				swapTree: swapResponse.swapTree, // For BTC/L-BTC
 				blindingKey: swapResponse.blindingKey, // For L-BTC
 				bip21: swapResponse.bip21 // For BTC/L-BTC
@@ -195,9 +207,13 @@ export class SubmarineSwapService {
 	 * 
 	 * @param swapData - Submarine swap data
 	 * @param signer - User's wallet signer
+	 * @param preimageHash - Payment hash from the Lightning invoice (32 bytes hex)
 	 * @returns Transaction hash
 	 */
-	async lockFundsEVM(swapData: SubmarineSwapData, signer: ethers.Signer): Promise<{ txHash: string }> {
+	async lockFundsEVM(
+		swapData: SubmarineSwapData,
+		signer: ethers.Signer
+	): Promise<{ txHash: string }> {
 		try {
 			// Validate swap data
 			if (swapData.fromAsset !== 'RBTC') {
@@ -209,7 +225,12 @@ export class SubmarineSwapService {
 			}
 
 			if (!swapData.preimageHash) {
-				throw new Error('Missing preimage hash for RBTC swap');
+				throw new Error('Missing preimage hash');
+			}
+
+			// Validate preimage hash format
+			if (!/^[0-9a-fA-F]{64}$/.test(swapData.preimageHash)) {
+				throw new Error('Invalid preimage hash format: must be 64 hex characters (32 bytes)');
 			}
 
 			// Check if already locked
@@ -289,22 +310,18 @@ export class SubmarineSwapService {
 
 			case 'transaction.mempool':
 				// User's lockup transaction is in mempool
-				console.log('✅ Lockup transaction detected in mempool');
 				break;
 
 			case 'transaction.confirmed':
 				// User's lockup confirmed - Boltz will now pay invoice
-				console.log('✅ Lockup transaction confirmed');
 				break;
 
 			case 'invoice.paid':
 				// Boltz paid the Lightning invoice - swap successful!
-				console.log('✅ Lightning invoice paid by Boltz');
 				break;
 
 			case 'transaction.claimed':
 				// Boltz claimed the on-chain funds
-				console.log('✅ Boltz claimed on-chain funds - swap complete');
 				break;
 
 			case 'swap.expired':

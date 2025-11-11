@@ -120,15 +120,11 @@ export class ChainSwapRefundService {
         swapData: ChainSwapData,
         params: ChainSwapRefundParams
     ): Promise<ChainSwapRefundResult> {
-        console.log('🔄 Starting L-BTC chain swap refund for swap:', params.swapId);
-
         // Check if refundable
         const refundCheck = await this.isSwapRefundable(swapData);
         if (!refundCheck.refundable) {
             throw new Error(`Swap not refundable: ${refundCheck.reason}`);
         }
-
-        console.log('✅ Swap is refundable at block height:', refundCheck.currentBlockHeight);
 
         // Validate refund address is different from lockup address
         if (params.refundAddress === swapData.lockupAddress) {
@@ -157,7 +153,6 @@ export class ChainSwapRefundService {
 
         // Get UTXOs
         const utxos = await this.getLiquidUTXOs(swapData);
-        console.log(`📦 Found ${utxos.length} UTXO(s) to refund`);
 
         // Parse refund private key
         const refundKeyPair = ECPair.fromPrivateKey(Buffer.from(swapData.refundPrivateKey, 'hex'));
@@ -167,7 +162,6 @@ export class ChainSwapRefundService {
 
         // Check if Taproot (modern) or legacy
         if (swapData.swapTree && swapData.serverPublicKey) {
-            console.log('🔧 Using Taproot refund path');
             refundTx = await this.constructTaprootRefund(
                 swapData,
                 utxos,
@@ -177,14 +171,11 @@ export class ChainSwapRefundService {
                 blindingKey
             );
         } else {
-            console.log('🔧 Using legacy P2WSH refund path');
             throw new Error('Legacy refunds not implemented - all new swaps use Taproot');
         }
 
         // Broadcast refund transaction
-        console.log('📡 Broadcasting refund transaction...');
         const txHash = await this.broadcastLiquidTransaction(refundTx.toHex());
-        console.log('✅ Refund transaction broadcast:', txHash);
 
         // Update swap data
         swapData.refundTxHash = txHash;
@@ -247,7 +238,6 @@ export class ChainSwapRefundService {
 
         // Get fee estimate (sat/vbyte)
         const feePerVbyte = await this.getLiquidFeeEstimate();
-        console.log(`💰 Using fee rate: ${feePerVbyte} sat/vbyte`);
 
         // Construct refund transaction using boltz-core
         const refundTx = await targetFee(
@@ -266,8 +256,6 @@ export class ChainSwapRefundService {
 
         // Try cooperative refund (get partial signature from Boltz)
         try {
-            console.log('🤝 Attempting cooperative refund with Boltz...');
-
             // Get partial signature from Boltz for each input
             for (let i = 0; i < refundTx.ins.length; i++) {
                 const freshMusig = await createMusig(refundKeyPair, serverPublicKey);
@@ -296,7 +284,6 @@ export class ChainSwapRefundService {
                 refundTx.ins[i].witness = [freshMusig.aggregatePartials()];
             }
 
-            console.log('✅ Cooperative refund signatures obtained');
             return refundTx;
         } catch (error) {
             console.warn('⚠️ Cooperative refund failed, falling back to uncooperative:', error);
@@ -321,7 +308,6 @@ export class ChainSwapRefundService {
                 true
             );
 
-            console.log('✅ Uncooperative refund transaction constructed');
             return uncoopTx;
         }
     }

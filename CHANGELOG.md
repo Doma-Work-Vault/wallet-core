@@ -28,7 +28,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - Consolidated all type definitions into centralized `types.ts` file
-- Improved type safety across swap services (zero `any` types)
+- Improved type safety across swap services
 - Enhanced error handling with descriptive validation messages
 - Optimized type exports (removed 10 unused type definitions)
 

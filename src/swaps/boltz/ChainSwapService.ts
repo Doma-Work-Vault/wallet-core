@@ -66,7 +66,7 @@ export class ChainSwapService {
 	private storage?: SwapStorage;
 	private claimingSwaps: Set<string> = new Set();
 
-	constructor(storage: SwapStorage, websocket: BoltzWebSocket, network: NetworkType = 'testnet') {
+	constructor(websocket: BoltzWebSocket, network: NetworkType = 'testnet', storage?: SwapStorage) {
 		this.boltzClient = new BoltzClient();
 		this.evmContractService = new EvmContractService(this.boltzClient);
 		this.rifRelayService = new RifRelayClaimService();
