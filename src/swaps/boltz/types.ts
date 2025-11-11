@@ -154,6 +154,10 @@ export interface CreateSubmarineSwapParams {
 
 	// Optional referral ID
 	referralId?: string;
+
+	// Optional signer for gas estimation (RBTC only)
+	// If provided, the service will estimate gas costs and include in result
+	signer?: any; // ethers.Signer
 }
 
 /**
@@ -164,6 +168,16 @@ export interface SubmarineSwapResult {
 	swapData: SubmarineSwapData;
 	// For RBTC: user needs to call lockFundsEVM()
 	// For BTC/L-BTC: user needs to send to lockupAddress
+	
+	/** Gas estimation for RBTC lockup (only for RBTC swaps) */
+	estimatedGas?: {
+		/** Estimated gas cost in wei */
+		costWei: bigint;
+		/** Estimated gas cost in satoshis (for user display) */
+		costSats: number;
+		/** Total amount user needs including gas (fromAmount + gas) in satoshis */
+		totalRequired: number;
+	};
 }
 
 /**

@@ -66,11 +66,11 @@ export class ChainSwapService {
 	private storage?: SwapStorage;
 	private claimingSwaps: Set<string> = new Set();
 
-	constructor(websocket: BoltzWebSocket, network: NetworkType = 'testnet', storage?: SwapStorage) {
-		this.boltzClient = new BoltzClient();
-		this.evmContractService = new EvmContractService(this.boltzClient);
+	constructor(websocket: BoltzWebSocket, boltzClient: BoltzClient, evmContractService: EvmContractService, storage?: SwapStorage) {
+		this.boltzClient = boltzClient;
+		this.evmContractService = evmContractService;
 		this.rifRelayService = new RifRelayClaimService();
-		this.refundService = new ChainSwapRefundService(this.boltzClient, network);
+		this.refundService = new ChainSwapRefundService(this.boltzClient);
 		this.storage = storage;
 		this.websocket = websocket;
 	}
