@@ -5,6 +5,37 @@ All notable changes to @bittasker/wallet-core will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.3] 2025-11-11
+
+### Changed
+- **WalletManager as Service Hub**: Refactored `WalletManager` to be the central initialization point for all services
+  - `EvmContractService` now initialized in constructor and shared across all swap services
+  - `ReverseSwapService`, `ChainSwapService`, and `SubmarineSwapService` now receive shared service instances
+  - Exposed `evmContractService` getter for direct access to gas estimation and contract operations
+  - Improved dependency injection pattern for better maintainability
+
+### Added
+- **Lightning Invoice Decoding**: `SubmarineSwapService` now decodes Lightning invoices (bolt11)
+  - Extracts invoice amount in satoshis
+  - Extracts payment hash (preimage hash) from invoice
+  - Validates invoice format and required fields
+- **Gas Estimation for Submarine Swaps**: Added comprehensive gas cost estimation
+  - `createSubmarineSwap()` now returns `estimatedGas` with lockup cost breakdown
+  - Includes `costWei`, `costSats`, and `totalRequired` (amount + gas) in response
+  - Non-blocking: continues if estimation fails (logs warning)
+- **Public Gas Estimation Methods**: `EvmContractService` now exposes gas estimation utilities
+  - `estimateLockupGas()`: Estimate gas for submarine swap lockups
+  - `estimateClaimGas()`: Estimate gas for reverse/chain swap claims
+  - `estimateRefundGas()`: Estimate gas for submarine swap refunds
+  - `hasSufficientBalance()`: Check if user has enough RBTC for operations
+
+### Technical
+- Centralized service initialization improves code reusability
+- All swap services now share single `EvmContractService` instance
+- Better separation of concerns between WalletManager and individual services
+
+[0.1.3]: https://gitlab.com/bittasker/wallet-core/-/tags/v0.1.3
+
 ## [0.1.2] - 2025-11-10
 
 ### Added

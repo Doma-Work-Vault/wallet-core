@@ -26,6 +26,7 @@ import { Transaction as LiquidTransaction, networks as LiquidNetworks } from 'li
 import { constructRefundTransaction as liquidConstructRefundTransaction, type LiquidRefundDetails } from 'boltz-core/dist/lib/liquid';
 import * as ecc from 'tiny-secp256k1';
 import { NetworkType } from '../../core/types';
+import { getNetwork } from '../../utils/networkConfig';
 
 const ECPair = ECPairFactory(ecc);
 
@@ -38,8 +39,8 @@ export class ChainSwapRefundService {
     private boltzClient: BoltzClient;
     private explorerUrl: string;
 
-    constructor(boltzClient: BoltzClient, network: NetworkType) {
-        this.network = network;
+    constructor(boltzClient: BoltzClient) {
+        this.network = getNetwork();
         this.boltzClient = boltzClient;
         this.explorerUrl = this.network === 'mainnet'
             ? 'https://blockstream.info/liquid/api'
