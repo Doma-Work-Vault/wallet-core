@@ -20,6 +20,7 @@ import { RSKWallet } from '../chains/rsk/RSKWallet';
 import { BSCWallet } from '../chains/bsc/BSCWallet';
 import { ChainSwapService } from '../swaps/boltz/ChainSwapService';
 import { ReverseSwapService } from '../swaps/boltz/ReverseSwapService';
+import { SubmarineSwapService } from '../swaps/boltz/SubmarineSwapService';
 import { BoltzWebSocket } from '../swaps/boltz/WebSocketClient';
 
 export interface WalletManagerConfig {
@@ -35,8 +36,22 @@ export interface WalletManagerConfig {
 	/** Optional BSC wallet configuration overrides */
 	bscConfig?: Partial<BSCWalletConfig>;
 	
-	/** Optional swap storage adapter (e.g., Nostr, IndexedDB, localStorage) */
+	/** 
+	 * Optional swap storage adapter (e.g., Nostr, IndexedDB, localStorage)
+	 * If provided, all swap services will use this storage.
+	 * For separate storage per service, use swapStorages instead.
+	 */
 	swapStorage?: SwapStorage;
+	
+	/**
+	 * Optional separate storage for each swap service
+	 * If provided, this takes precedence over swapStorage
+	 */
+	swapStorages?: {
+		reverse?: SwapStorage;
+		submarine?: SwapStorage;
+		chain?: SwapStorage;
+	};
 }
 
 export interface WalletBalances {
@@ -59,6 +74,10 @@ export interface SwapLimits {
 		minimal: number;
 		maximal: number;
 	};
+	submarine: {
+		minimal: number;
+		maximal: number;
+	};
 }
 
 /**
@@ -70,6 +89,7 @@ export class WalletManager {
 	private _bscWallet: BSCWallet | null = null;
 	private _reverseSwapService: ReverseSwapService | null = null;
 	private _chainSwapService: ChainSwapService | null = null;
+	private _submarineSwapService: SubmarineSwapService | null = null;
 	private _websocket: BoltzWebSocket | null = null;
 	
 	constructor(config: WalletManagerConfig) {
@@ -81,19 +101,22 @@ export class WalletManager {
 		// Initialize WebSocket for swap monitoring (uses global network getter)
 		this._websocket = new BoltzWebSocket(getWebSocketEndpoint());
 		
-		// Initialize swap services if storage is provided
-		if (config.swapStorage) {
-			this._reverseSwapService = new ReverseSwapService(
-				config.network, 
-				config.swapStorage,
-				this._websocket
-			);
-			this._chainSwapService = new ChainSwapService(
-				config.network, 
-				config.swapStorage,
-				this._websocket
-			);
-		}
+		// Always initialize services (storage is optional)
+		this._reverseSwapService = new ReverseSwapService(
+			this._websocket,
+			config.swapStorages?.reverse || config.swapStorage
+		);
+		
+		this._chainSwapService = new ChainSwapService(
+			this._websocket,
+			this.config.network,
+			config.swapStorages?.chain || config.swapStorage
+		);
+		
+		this._submarineSwapService = new SubmarineSwapService(
+			this._websocket,
+			config.swapStorages?.submarine || config.swapStorage
+		);
 	}
 	
 	/**
@@ -117,18 +140,16 @@ export class WalletManager {
 		await this._bscWallet.initialize(this.config.mnemonic);
 		
 		// Set wallet getter for swap services (for automatic claiming)
-		if (this._reverseSwapService && this._rskWallet) {
+		if (this._reverseSwapService) {
 			this._reverseSwapService.setWalletGetter(() => this._rskWallet!.getWallet());
 		}
 		
-		if (this._chainSwapService && this._rskWallet) {
+		if (this._chainSwapService) {
 			this._chainSwapService.setWalletGetter(() => this._rskWallet!.getWallet());
 		}
 		
-		// Connect WebSocket for swap monitoring (if swap services are enabled)
-		if (this._reverseSwapService || this._chainSwapService) {
-			await this.connectWebSocket();
-		}
+		// Connect WebSocket for swap monitoring
+		await this.connectWebSocket();
 		
 		// Recover pending swaps
 		// await this.recoverPendingSwaps();
@@ -172,7 +193,7 @@ export class WalletManager {
 	 */
 	get reverseSwapService(): ReverseSwapService {
 		if (!this._reverseSwapService) {
-			throw new Error('Swap storage not configured. Provide swapStorage in config.');
+			throw new Error('WalletManager not initialized. Call initialize() first.');
 		}
 		return this._reverseSwapService;
 	}
@@ -182,9 +203,19 @@ export class WalletManager {
 	 */
 	get chainSwapService(): ChainSwapService {
 		if (!this._chainSwapService) {
-			throw new Error('Swap storage not configured. Provide swapStorage in config.');
+			throw new Error('WalletManager not initialized. Call initialize() first.');
 		}
 		return this._chainSwapService;
+	}
+	
+	/**
+	 * Get submarine swap service (RBTC/BTC/L-BTC → Lightning)
+	 */
+	get submarineSwapService(): SubmarineSwapService {
+		if (!this._submarineSwapService) {
+			throw new Error('WalletManager not initialized. Call initialize() first.');
+		}
+		return this._submarineSwapService;
 	}
 	
 	/**
@@ -212,10 +243,12 @@ export class WalletManager {
 	async getSwapLimits(): Promise<SwapLimits> {
 		const lightningLimits = await this.reverseSwapService.getSwapLimits();
 		const liquidLimits = await this.chainSwapService.getSwapLimits();
+		const submarineLimits = await this.submarineSwapService.getSwapLimits('RBTC', 'BTC');
 		
 		return {
 			lightning: lightningLimits,
-			liquid: liquidLimits
+			liquid: liquidLimits,
+			submarine: submarineLimits
 		};
 	}
 	

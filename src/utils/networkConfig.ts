@@ -339,6 +339,7 @@ export function getMulticallAddress(): string | null {
 
 /**
  * Check if RIF Relay is available for current environment
+ * @returns True if RIF Relay is available
  */
 export function isRifRelayAvailable(): boolean {
 	const config = getBoltzConfig();

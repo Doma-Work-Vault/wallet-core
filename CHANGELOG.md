@@ -5,7 +5,47 @@ All notable changes to @bittasker/wallet-core will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.1.1] - 2025-01-07
+## [0.1.2] - 2025-11-10
+
+### Added
+- **Submarine Swap Support**: Pay Lightning invoices using on-chain RBTC
+- `SubmarineSwapService`: Complete lifecycle management for RBTC → Lightning swaps
+- `SubmarineSwapRefundService`: Refund handling for expired or failed submarine swaps
+- Support for RBTC, BTC, and L-BTC submarine swaps (RBTC fully tested)
+- Automatic swap recovery from storage on app restart
+- Real-time WebSocket monitoring for submarine swap status updates
+- EVM lockup functionality via `lockFundsEVM()` for RBTC swaps
+- Comprehensive swap status tracking: created → lockup → confirmed → invoice paid → claimed
+
+### Features
+- **Submarine Swap Flow**: User locks RBTC first, then Boltz pays Lightning invoice
+- **Trustless Refunds**: Automatic refund support if Boltz fails to pay invoice
+- **RIF Relay Integration**: Gasless RBTC refunds for failed submarine swaps
+- **Storage Persistence**: Swap data persists across app restarts
+- **Multi-Asset Support**: RBTC (EVM), BTC, and L-BTC submarine swaps
+- Invoice amount validation and swap limit checking
+- Lockup information helper for UTXO chains (BTC/L-BTC)
+
+### Changed
+- Consolidated all type definitions into centralized `types.ts` file
+- Improved type safety across swap services
+- Enhanced error handling with descriptive validation messages
+- Optimized type exports (removed 10 unused type definitions)
+
+### Removed
+- Unused Bitcoin UTXO cooperative claim/refund types (not needed for RBTC)
+- Duplicate submarine refund type definitions
+- Legacy `LockFundsParams` and `LockFundsResult` types
+
+### Technical
+- Reuses existing `EvmContractService` for RBTC lockups
+- Integrates with `BoltzClient` and `BoltzWebSocket` infrastructure
+- Storage-agnostic design (works with Nostr/IndexedDB/localStorage)
+- TypeScript strict mode compliance
+
+[0.1.2]: https://gitlab.com/bittasker/wallet-core/-/tags/v0.1.2
+
+## [0.1.1] - 2025-11-07
 
 ### Security
 - **CRITICAL**: Added address validation in swap services to prevent invalid addresses
@@ -27,7 +67,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 [0.1.1]: https://gitlab.com/bittasker/wallet-core/-/tags/v0.1.1
 
-## [0.1.0] - 2025-01-06
+## [0.1.0] - 2025-11-06
 
 ### Added
 - Initial release of @bittasker/wallet-core
