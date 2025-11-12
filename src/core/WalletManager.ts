@@ -89,12 +89,12 @@ export class WalletManager {
 	private config: WalletManagerConfig;
 	private _rskWallet: RSKWallet | null = null;
 	private _bscWallet: BSCWallet | null = null;
+	private _websocket: BoltzWebSocket | null = null;
+	private _boltzClient: BoltzClient | null = null;
 	private _evmContractService: EvmContractService | null = null;
 	private _reverseSwapService: ReverseSwapService | null = null;
 	private _chainSwapService: ChainSwapService | null = null;
 	private _submarineSwapService: SubmarineSwapService | null = null;
-	private _websocket: BoltzWebSocket | null = null;
-	
 	constructor(config: WalletManagerConfig) {
 		this.config = config;
 		
@@ -105,29 +105,29 @@ export class WalletManager {
 		this._websocket = new BoltzWebSocket(getWebSocketEndpoint());
 		
 		// Initialize Boltz client
-		const boltzClient = new BoltzClient();
+		this._boltzClient = new BoltzClient();
 
 		// Initialize shared EVM contract service
-		this._evmContractService = new EvmContractService(boltzClient);
+		this._evmContractService = new EvmContractService(this._boltzClient);
 		
 		// Initialize services (storage is optional)
 		this._reverseSwapService = new ReverseSwapService(
 			this._websocket,
-			boltzClient,
+			this._boltzClient,
 			this._evmContractService,
 			config.swapStorages?.reverse || config.swapStorage
 		);
 		
 		this._chainSwapService = new ChainSwapService(
 			this._websocket,
-			boltzClient,
+			this._boltzClient,
 			this._evmContractService,
 			config.swapStorages?.chain || config.swapStorage
 		);
 		
 		this._submarineSwapService = new SubmarineSwapService(
 			this._websocket,
-			boltzClient,
+			this._boltzClient,
 			this._evmContractService,
 			config.swapStorages?.submarine || config.swapStorage
 		);
@@ -200,6 +200,16 @@ export class WalletManager {
 			throw new Error('WalletManager not initialized. Call initialize() first.');
 		}
 		return this._bscWallet;
+	}
+
+	/**
+	 * Get Boltz client instance
+	 */
+	get boltzClient(): BoltzClient {
+		if (!this._boltzClient) {
+			throw new Error('WalletManager not initialized. Call initialize() first.');
+		}
+		return this._boltzClient;
 	}
 	
 	/**
