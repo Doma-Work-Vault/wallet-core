@@ -35,7 +35,7 @@ export function setNetworkGetter(getter: () => NetworkType): void {
  * Get the current network
  * @internal
  */
-function getNetwork(): NetworkType {
+export function getNetwork(): NetworkType {
 	if (!_networkGetter) {
 		console.warn('Network getter not set, defaulting to testnet');
 		return 'testnet';

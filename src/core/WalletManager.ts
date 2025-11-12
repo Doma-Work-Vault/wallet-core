@@ -22,6 +22,8 @@ import { ChainSwapService } from '../swaps/boltz/ChainSwapService';
 import { ReverseSwapService } from '../swaps/boltz/ReverseSwapService';
 import { SubmarineSwapService } from '../swaps/boltz/SubmarineSwapService';
 import { BoltzWebSocket } from '../swaps/boltz/WebSocketClient';
+import { EvmContractService } from '../swaps/boltz/EvmContractService';
+import { BoltzClient } from '../swaps/boltz/BoltzClient';
 
 export interface WalletManagerConfig {
 	/** Network type: 'mainnet' or 'testnet' */
@@ -87,6 +89,7 @@ export class WalletManager {
 	private config: WalletManagerConfig;
 	private _rskWallet: RSKWallet | null = null;
 	private _bscWallet: BSCWallet | null = null;
+	private _evmContractService: EvmContractService | null = null;
 	private _reverseSwapService: ReverseSwapService | null = null;
 	private _chainSwapService: ChainSwapService | null = null;
 	private _submarineSwapService: SubmarineSwapService | null = null;
@@ -101,20 +104,31 @@ export class WalletManager {
 		// Initialize WebSocket for swap monitoring (uses global network getter)
 		this._websocket = new BoltzWebSocket(getWebSocketEndpoint());
 		
-		// Always initialize services (storage is optional)
+		// Initialize Boltz client
+		const boltzClient = new BoltzClient();
+
+		// Initialize shared EVM contract service
+		this._evmContractService = new EvmContractService(boltzClient);
+		
+		// Initialize services (storage is optional)
 		this._reverseSwapService = new ReverseSwapService(
 			this._websocket,
+			boltzClient,
+			this._evmContractService,
 			config.swapStorages?.reverse || config.swapStorage
 		);
 		
 		this._chainSwapService = new ChainSwapService(
 			this._websocket,
-			this.config.network,
+			boltzClient,
+			this._evmContractService,
 			config.swapStorages?.chain || config.swapStorage
 		);
 		
 		this._submarineSwapService = new SubmarineSwapService(
 			this._websocket,
+			boltzClient,
+			this._evmContractService,
 			config.swapStorages?.submarine || config.swapStorage
 		);
 	}
@@ -216,6 +230,17 @@ export class WalletManager {
 			throw new Error('WalletManager not initialized. Call initialize() first.');
 		}
 		return this._submarineSwapService;
+	}
+	
+	/**
+	 * Get EVM contract service for direct contract interactions
+	 * Useful for gas estimation and advanced contract operations
+	 */
+	get evmContractService(): EvmContractService {
+		if (!this._evmContractService) {
+			throw new Error('WalletManager not initialized. Call initialize() first.');
+		}
+		return this._evmContractService;
 	}
 	
 	/**

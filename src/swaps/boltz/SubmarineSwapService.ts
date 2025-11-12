@@ -49,6 +49,7 @@ import { BoltzClient } from './BoltzClient';
 import { BoltzWebSocket } from './WebSocketClient';
 import { EvmContractService } from './EvmContractService';
 import { SubmarineSwapRefundService } from './SubmarineSwapRefundService';
+import { weiToSatoshi } from '../../utils/networkConfig';
 import bolt11 from 'bolt11';
 
 export class SubmarineSwapService {
@@ -59,10 +60,10 @@ export class SubmarineSwapService {
 	private activeSwaps: Map<string, SubmarineSwapData> = new Map();
 	private storage?: SwapStorage;
 
-	constructor(websocket: BoltzWebSocket, storage?: SwapStorage) {
-		this.boltzClient = new BoltzClient();
+	constructor(websocket: BoltzWebSocket, boltzClient: BoltzClient, evmContractService: EvmContractService, storage?: SwapStorage) {
+		this.boltzClient = boltzClient;
 		this.storage = storage;
-		this.evmContractService = new EvmContractService(this.boltzClient);
+		this.evmContractService = evmContractService;
 		this.refundService = new SubmarineSwapRefundService(this.boltzClient);
 		this.refundService.setEvmContractService(this.evmContractService);
 		this.websocket = websocket;
@@ -132,16 +133,15 @@ export class SubmarineSwapService {
 				referralId: params.referralId || ''
 			});
 
-			// Decode invoice to get amount
-			const invoiceAmount = this.decodeInvoiceAmount(params.invoice);
-
-			// Calculate expiration time based on timeout block height
-			// RBTC: ~30s blocks, BTC: ~10min blocks, L-BTC: ~1min blocks
-			const blockTime = params.from === 'RBTC' ? 30 : params.from === 'L-BTC' ? 60 : 600;
-			const expiresAt = Date.now() + (swapResponse.timeoutBlockHeight * blockTime * 1000);
-
-			// Decode the invoice to extract the preimage hash (payment hash)
+			// Decode the invoice to extract amount and payment hash
 			const decodedInvoice = bolt11.decode(params.invoice);
+
+			// Extract amount from invoice (in millisatoshis)
+			const invoiceAmount = decodedInvoice.millisatoshis
+				? Math.floor(Number(decodedInvoice.millisatoshis) / 1000) // Convert to satoshis
+				: 0; // Some invoices may not have an amount (amount-less invoices)
+
+			// Extract the payment hash (preimage hash)
 			const paymentHashTag = decodedInvoice.tags.find((tag) => tag.tagName === 'payment_hash');
 
 			if (!paymentHashTag) {
@@ -150,6 +150,11 @@ export class SubmarineSwapService {
 
 			// Convert the payment hash to hex string
 			const preimageHash = Buffer.from(paymentHashTag.data as string, 'hex').toString('hex');
+
+			// Calculate expiration time based on timeout block height
+			// RBTC: ~30s blocks, BTC: ~10min blocks, L-BTC: ~1min blocks
+			const blockTime = params.from === 'RBTC' ? 30 : params.from === 'L-BTC' ? 60 : 600;
+			const expiresAt = Date.now() + (swapResponse.timeoutBlockHeight * blockTime * 1000);
 
 			// Prepare swap data
 			const swapData: SubmarineSwapData = {
@@ -189,9 +194,34 @@ export class SubmarineSwapService {
 				await this.handleSwapUpdate(event);
 			});
 
+			// Estimate gas for RBTC swaps if signer is provided
+			let estimatedGas: SubmarineSwapResult['estimatedGas'];
+			if (params.from === 'RBTC' && params.signer && swapData.claimAddress && swapData.preimageHash) {
+				try {
+					const gasWei = await this.evmContractService.estimateLockupGas({
+						signer: params.signer,
+						preimageHash: swapData.preimageHash,
+						claimAddress: swapData.claimAddress,
+						timeoutBlockHeight: swapData.timeoutBlockHeight,
+						amountSats: swapData.fromAmount
+					});
+
+					const gasSats = weiToSatoshi(gasWei);
+					estimatedGas = {
+						costWei: gasWei,
+						costSats: gasSats,
+						totalRequired: swapData.fromAmount + gasSats
+					};
+				} catch (error) {
+					console.warn('⚠️ Failed to estimate gas for submarine swap:', error);
+					// Continue without gas estimation - non-critical
+				}
+			}
+
 			return {
 				swapId: swapResponse.id,
-				swapData
+				swapData,
+				estimatedGas
 			};
 		} catch (error) {
 			console.error('Failed to create submarine swap:', error);
@@ -455,24 +485,6 @@ export class SubmarineSwapService {
 		} catch (error) {
 			console.error('Failed to delete swap:', error);
 			return false;
-		}
-	}
-
-	/**
-	 * Decode Lightning invoice amount
-	 * Simple decoder - in production, use a proper BOLT11 decoder
-	 */
-	private decodeInvoiceAmount(invoice: string): number {
-		// This is a simplified decoder
-		// In production, use bolt11 library or similar
-		try {
-			// Lightning invoices encode amount in the invoice string
-			// Format: ln[network][amount][multiplier]...
-			// For now, return 0 and let the API response provide the amount
-			return 0;
-		} catch (error) {
-			console.warn('Failed to decode invoice amount:', error);
-			return 0;
 		}
 	}
 }
