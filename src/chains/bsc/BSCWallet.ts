@@ -30,6 +30,7 @@ export class BSCWallet {
 
     /**
      * Initialize BSC wallet from mnemonic
+     * Note: RPC connection test is deferred for faster initialization
      */
     async initialize(mnemonic: string): Promise<void> {
         try {
@@ -57,8 +58,8 @@ export class BSCWallet {
             const hdNode = ethers.HDNodeWallet.fromPhrase(mnemonic, undefined, "m/44'/60'/0'/0/0");
             this.wallet = new ethers.Wallet(hdNode.privateKey, this.provider);
 
-            // Test RPC connection
-            await this.provider.getBlockNumber();
+            // Don't test RPC connection during initialization for faster init
+            // Connection will be tested on first use (getBlockNumber, getBalance, etc.)
 
             // Initialize USDT contract
             const usdtToken = getUSDTToken();

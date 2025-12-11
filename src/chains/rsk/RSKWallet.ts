@@ -26,6 +26,7 @@ export class RSKWallet {
 
     /**
      * Initialize RSK wallet from mnemonic
+     * Note: RPC connection test is deferred for faster initialization
      */
     async initialize(mnemonic: string): Promise<void> {
         try {
@@ -53,8 +54,8 @@ export class RSKWallet {
             const hdNode = ethers.HDNodeWallet.fromPhrase(mnemonic, undefined, "m/44'/137'/0'/0/0");
             this.wallet = new ethers.Wallet(hdNode.privateKey, this.provider);
 
-            // Test RPC connection
-            await this.provider.getBlockNumber();
+            // Don't test RPC connection during initialization for faster init
+            // Connection will be tested on first use (getBlockNumber, getBalance, etc.)
         } catch (error) {
             throw new Error(`RSK wallet initialization failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
         }
