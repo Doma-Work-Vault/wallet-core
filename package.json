@@ -21,7 +21,10 @@
     "build": "tsc",
     "dev": "tsc --watch",
     "prepublishOnly": "npm run build",
-    "benchmark": "tsx scripts/benchmark-init.ts"
+    "benchmark": "tsx scripts/benchmark-init.ts",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage"
   },
   "keywords": [
     "bitcoin",
@@ -77,6 +80,7 @@
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
+    "@vitest/coverage-v8": "^3.2.4",
     "tsx": "^4.21.0",
     "typescript": "^5.0.0",
     "vitest": "^3.0.0"

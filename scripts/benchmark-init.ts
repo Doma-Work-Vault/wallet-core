@@ -511,3 +511,4 @@ runBenchmarks().catch(error => {
     // Exit with code 0 even on error - some tests may fail due to missing services
     process.exit(0);
 });
+
