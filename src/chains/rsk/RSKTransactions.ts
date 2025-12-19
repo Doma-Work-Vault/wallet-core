@@ -13,8 +13,7 @@ import { ethers } from 'ethers';
  */
 export async function loadRSKTransactions(
     address: string,
-    provider: ethers.JsonRpcProvider,
-    network: NetworkType
+    provider: ethers.JsonRpcProvider
 ): Promise<Transaction[]> {
     try {
         const transactions: Transaction[] = [];
@@ -66,16 +65,6 @@ export async function loadRSKTransactions(
                         const amount = parseFloat(ethers.formatEther(tx.value || '0'));
                         const swapType: 'chain' | 'reverse' = 'reverse';
 
-                        let fee: number | undefined;
-                        if (tx.gas_used && tx.gas_used !== '0' && tx.gas_price && tx.gas_price !== '0') {
-                            try {
-                                const feeWei = BigInt(tx.gas_used) * BigInt(tx.gas_price);
-                                fee = parseFloat(ethers.formatEther(feeWei));
-                            } catch (error) {
-                                console.debug('Failed to calculate swap fee:', error);
-                            }
-                        }
-
                         transactions.push({
                             hash: tx.hash,
                             from: txFrom,
@@ -83,18 +72,63 @@ export async function loadRSKTransactions(
                             value: tx.value || '0',
                             gasUsed: tx.gas_used?.toString() || '0',
                             gasPrice: tx.gas_price?.toString() || '0',
+                            gasLimit: tx.gas_limit?.toString() || '0',
                             blockNumber: parseInt(tx.block_number) || 0,
                             timestamp: new Date(tx.timestamp).getTime(),
                             status: tx.status === 'ok' ? 'confirmed' : 'failed',
                             type: 'swap',
                             network: 'rsk',
+                            nonce: tx.nonce || 0,
+                            position: tx.position || 0,
+                            confirmations: tx.confirmations || 0,
+                            
+                            // Contract interaction data
+                            rawInput: tx.raw_input || '',
+                            method: tx.method || null,
+                            isContract: tx.to?.is_contract || false,
+                            transactionTypes: tx.transaction_types || [],
+                            decodedInput: tx.decoded_input,
+                            tokenTransfers: tx.token_transfers,
+                            
+                            // Gas pricing data (EIP-1559)
+                            maxFeePerGas: tx.max_fee_per_gas || null,
+                            maxPriorityFeePerGas: tx.max_priority_fee_per_gas || null,
+                            baseFeePerGas: tx.base_fee_per_gas || null,
+                            priorityFee: tx.priority_fee || null,
+                            
+                            // Additional metadata
+                            result: tx.result || tx.status || 'success',
+                            revertReason: tx.revert_reason || null,
+                            createdContract: tx.created_contract || null,
+                            isPendingUpdate: tx.is_pending_update || false,
+                            transactionType: tx.type || 0,
+                            hasErrorInInternalTransactions: tx.has_error_in_internal_transactions || false,
+                            
+                            // Fee information
+                            fee: tx.fee || {
+                                type: 'actual',
+                                value: (BigInt(tx.gas_used || 0) * BigInt(tx.gas_price || 0)).toString()
+                            },
+                            transactionBurntFee: tx.transaction_burnt_fee || null,
+                            
+                            // Exchange rates
+                            exchangeRate: tx.exchange_rate || null,
+                            historicExchangeRate: tx.historic_exchange_rate || null,
+                            
+                            // Additional fields
+                            confirmationDuration: tx.confirmation_duration || null,
+                            tokenTransfersOverflow: tx.token_transfers_overflow || null,
+                            transactionTag: tx.transaction_tag || null,
+                            authorizationList: tx.authorization_list || [],
+                            actions: tx.actions || [],
+                            
+                            // Legacy/backward compatibility fields
                             tokenSymbol: 'rBTC',
                             swapType,
                             id: tx.hash,
                             asset: 'rBTC',
                             formattedAmount: `${amount.toFixed(6)} rBTC`,
                             description: 'Swap claimed',
-                            fee,
                             address: txTo,
                             txHash: tx.hash
                         });
@@ -103,16 +137,6 @@ export async function loadRSKTransactions(
                         const amount = parseFloat(ethers.formatEther(tx.value || '0'));
                         const txType = tx.from.hash.toLowerCase() === addressLower ? 'send' : 'receive';
 
-                        let fee: number | undefined;
-                        if (tx.gas_used && tx.gas_used !== '0' && tx.gas_price && tx.gas_price !== '0') {
-                            try {
-                                const feeWei = BigInt(tx.gas_used) * BigInt(tx.gas_price);
-                                fee = parseFloat(ethers.formatEther(feeWei));
-                            } catch (error) {
-                                console.debug('Failed to calculate transaction fee:', error);
-                            }
-                        }
-
                         transactions.push({
                             hash: tx.hash,
                             from: tx.from.hash,
@@ -120,16 +144,61 @@ export async function loadRSKTransactions(
                             value: tx.value || '0',
                             gasUsed: tx.gas_used?.toString() || '0',
                             gasPrice: tx.gas_price?.toString() || '0',
+                            gasLimit: tx.gas_limit?.toString() || '0',
                             blockNumber: parseInt(tx.block_number) || 0,
                             timestamp: new Date(tx.timestamp).getTime(),
                             status: tx.status === 'ok' ? 'confirmed' : 'failed',
                             type: txType,
                             network: 'rsk',
+                            nonce: tx.nonce || 0,
+                            position: tx.position || 0,
+                            confirmations: tx.confirmations || 0,
+                            
+                            // Contract interaction data
+                            rawInput: tx.raw_input || '',
+                            method: tx.method || null,
+                            isContract: tx.to?.is_contract || false,
+                            transactionTypes: tx.transaction_types || [],
+                            decodedInput: tx.decoded_input,
+                            tokenTransfers: tx.token_transfers,
+                            
+                            // Gas pricing data (EIP-1559)
+                            maxFeePerGas: tx.max_fee_per_gas || null,
+                            maxPriorityFeePerGas: tx.max_priority_fee_per_gas || null,
+                            baseFeePerGas: tx.base_fee_per_gas || null,
+                            priorityFee: tx.priority_fee || null,
+                            
+                            // Additional metadata
+                            result: tx.result || tx.status || 'success',
+                            revertReason: tx.revert_reason || null,
+                            createdContract: tx.created_contract || null,
+                            isPendingUpdate: tx.is_pending_update || false,
+                            transactionType: tx.type || 0,
+                            hasErrorInInternalTransactions: tx.has_error_in_internal_transactions || false,
+                            
+                            // Fee information
+                            fee: tx.fee || {
+                                type: 'actual',
+                                value: (BigInt(tx.gas_used || 0) * BigInt(tx.gas_price || 0)).toString()
+                            },
+                            transactionBurntFee: tx.transaction_burnt_fee || null,
+                            
+                            // Exchange rates
+                            exchangeRate: tx.exchange_rate || null,
+                            historicExchangeRate: tx.historic_exchange_rate || null,
+                            
+                            // Additional fields
+                            confirmationDuration: tx.confirmation_duration || null,
+                            tokenTransfersOverflow: tx.token_transfers_overflow || null,
+                            transactionTag: tx.transaction_tag || null,
+                            authorizationList: tx.authorization_list || [],
+                            actions: tx.actions || [],
+                            
+                            // Legacy/backward compatibility fields
                             id: tx.hash,
                             asset: 'rBTC',
                             formattedAmount: `${amount.toFixed(6)} rBTC`,
                             description: txType === 'send' ? 'RSK transaction sent' : 'RSK payment received',
-                            fee,
                             address: tx.to?.hash || '0x0000000000000000000000000000000000000000',
                             txHash: tx.hash
                         });
@@ -153,16 +222,6 @@ export async function loadRSKTransactions(
                             const amount = parseFloat(ethers.formatEther(tx.value || '0'));
                             const txType = (tx.from?.hash || tx.from)?.toLowerCase() === addressLower ? 'send' : 'receive';
 
-                            let fee: number | undefined;
-                            if (tx.gas_used && tx.gas_used !== '0' && tx.gas_price && tx.gas_price !== '0') {
-                                try {
-                                    const feeWei = BigInt(tx.gas_used) * BigInt(tx.gas_price);
-                                    fee = parseFloat(ethers.formatEther(feeWei));
-                                } catch (error) {
-                                    console.debug('Failed to calculate transaction fee:', error);
-                                }
-                            }
-
                             transactions.push({
                                 hash: tx.hash,
                                 from: tx.from?.hash || tx.from,
@@ -170,16 +229,61 @@ export async function loadRSKTransactions(
                                 value: tx.value || '0',
                                 gasUsed: tx.gas_used?.toString() || '0',
                                 gasPrice: tx.gas_price?.toString() || '0',
+                                gasLimit: tx.gas_limit?.toString() || '0',
                                 blockNumber: parseInt(tx.block_number) || 0,
                                 timestamp: new Date(tx.timestamp).getTime(),
                                 status: tx.status === 'ok' ? 'confirmed' : 'failed',
                                 type: txType,
                                 network: 'rsk',
+                                nonce: tx.nonce || 0,
+                                position: tx.position || 0,
+                                confirmations: tx.confirmations || 0,
+                                
+                                // Contract interaction data
+                                rawInput: tx.raw_input || '',
+                                method: tx.method || null,
+                                isContract: tx.to?.is_contract || false,
+                                transactionTypes: tx.transaction_types || [],
+                                decodedInput: tx.decoded_input,
+                                tokenTransfers: tx.token_transfers,
+                                
+                                // Gas pricing data (EIP-1559)
+                                maxFeePerGas: tx.max_fee_per_gas || null,
+                                maxPriorityFeePerGas: tx.max_priority_fee_per_gas || null,
+                                baseFeePerGas: tx.base_fee_per_gas || null,
+                                priorityFee: tx.priority_fee || null,
+                                
+                                // Additional metadata
+                                result: tx.result || tx.status || 'success',
+                                revertReason: tx.revert_reason || null,
+                                createdContract: tx.created_contract || null,
+                                isPendingUpdate: tx.is_pending_update || false,
+                                transactionType: tx.type || 0,
+                                hasErrorInInternalTransactions: tx.has_error_in_internal_transactions || false,
+                                
+                                // Fee information
+                                fee: tx.fee || {
+                                    type: 'actual',
+                                    value: (BigInt(tx.gas_used || 0) * BigInt(tx.gas_price || 0)).toString()
+                                },
+                                transactionBurntFee: tx.transaction_burnt_fee || null,
+                                
+                                // Exchange rates
+                                exchangeRate: tx.exchange_rate || null,
+                                historicExchangeRate: tx.historic_exchange_rate || null,
+                                
+                                // Additional fields
+                                confirmationDuration: tx.confirmation_duration || null,
+                                tokenTransfersOverflow: tx.token_transfers_overflow || null,
+                                transactionTag: tx.transaction_tag || null,
+                                authorizationList: tx.authorization_list || [],
+                                actions: tx.actions || [],
+                                
+                                // Legacy/backward compatibility fields
                                 id: tx.hash,
                                 asset: 'rBTC',
                                 formattedAmount: `${amount.toFixed(6)} rBTC`,
                                 description: txType === 'send' ? 'RSK transaction sent' : 'RSK payment received',
-                                fee,
                                 address: tx.to?.hash || tx.to || '0x0000000000000000000000000000000000000000',
                                 txHash: tx.hash
                             });
@@ -203,16 +307,6 @@ export async function loadRSKTransactions(
                                 const amount = parseFloat(ethers.formatEther(tx.value || '0'));
                                 const txType = tx.from.toLowerCase() === addressLower ? 'send' : 'receive';
 
-                                let fee: number | undefined;
-                                if (tx.gasUsed && tx.gasUsed !== '0' && tx.gasPrice && tx.gasPrice !== '0') {
-                                    try {
-                                        const feeWei = BigInt(tx.gasUsed) * BigInt(tx.gasPrice);
-                                        fee = parseFloat(ethers.formatEther(feeWei));
-                                    } catch (error) {
-                                        console.debug('Failed to calculate transaction fee:', error);
-                                    }
-                                }
-
                                 transactions.push({
                                     hash: tx.hash,
                                     from: tx.from,
@@ -220,16 +314,61 @@ export async function loadRSKTransactions(
                                     value: tx.value || '0',
                                     gasUsed: tx.gasUsed?.toString() || '0',
                                     gasPrice: tx.gasPrice?.toString() || '0',
+                                    gasLimit: tx.gas?.toString() || '0',
                                     blockNumber: parseInt(tx.blockNumber) || 0,
                                     timestamp: parseInt(tx.timeStamp) * 1000,
                                     status: tx.isError === '0' ? 'confirmed' : 'failed',
                                     type: txType,
                                     network: 'rsk',
+                                    nonce: parseInt(tx.nonce) || 0,
+                                    position: parseInt(tx.transactionIndex) || 0,
+                                    confirmations: parseInt(tx.confirmations) || 0,
+                                    
+                                    // Contract interaction data (v1 API has limited data)
+                                    rawInput: tx.input || '',
+                                    method: null,
+                                    isContract: false,
+                                    transactionTypes: [],
+                                    decodedInput: null,
+                                    tokenTransfers: null,
+                                    
+                                    // Gas pricing data (EIP-1559)
+                                    maxFeePerGas: null,
+                                    maxPriorityFeePerGas: null,
+                                    baseFeePerGas: null,
+                                    priorityFee: null,
+                                    
+                                    // Additional metadata
+                                    result: tx.isError === '0' ? 'success' : 'failed',
+                                    revertReason: null,
+                                    createdContract: tx.contractAddress || null,
+                                    isPendingUpdate: false,
+                                    transactionType: 0,
+                                    hasErrorInInternalTransactions: false,
+                                    
+                                    // Fee information
+                                    fee: {
+                                        type: 'actual',
+                                        value: (BigInt(tx.gasUsed || 0) * BigInt(tx.gasPrice || 0)).toString()
+                                    },
+                                    transactionBurntFee: null,
+                                    
+                                    // Exchange rates
+                                    exchangeRate: null,
+                                    historicExchangeRate: null,
+                                    
+                                    // Additional fields
+                                    confirmationDuration: null,
+                                    tokenTransfersOverflow: null,
+                                    transactionTag: null,
+                                    authorizationList: [],
+                                    actions: [],
+                                    
+                                    // Legacy/backward compatibility fields
                                     id: tx.hash,
                                     asset: 'rBTC',
                                     formattedAmount: `${amount.toFixed(6)} rBTC`,
                                     description: txType === 'send' ? 'RSK transaction sent' : 'RSK payment received',
-                                    fee,
                                     address: tx.to || '0x0000000000000000000000000000000000000000',
                                     txHash: tx.hash
                                 });

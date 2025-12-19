@@ -1,0 +1,62 @@
+{
+  "timestamp": "2025-12-11T04:48:20.964Z",
+  "results": [
+    {
+      "name": "RSK Wallet Initialization (testnet)",
+      "duration": 719.2795000000001,
+      "phases": {
+        "Create Wallet": 0.06271400000002814,
+        "Initialize": 583.2533990000001,
+        "Get Block Number": 135.963387
+      },
+      "success": true
+    },
+    {
+      "name": "BSC Wallet Initialization (testnet)",
+      "duration": 433.19873299999995,
+      "phases": {
+        "Create Wallet": 0.10079399999995076,
+        "Initialize": 299.9408920000001,
+        "Get Block Number": 133.15704699999992
+      },
+      "success": true
+    },
+    {
+      "name": "WebSocket Connection (testnet)",
+      "duration": 0,
+      "phases": {},
+      "success": false,
+      "error": "Unknown error"
+    },
+    {
+      "name": "Boltz Client Initialization",
+      "duration": 0,
+      "phases": {},
+      "success": false,
+      "error": "Swap pairs request failed: fetch failed"
+    },
+    {
+      "name": "EVM Contract Service Initialization",
+      "duration": 0,
+      "phases": {},
+      "success": false,
+      "error": "Failed to get EtherSwap contract address: Contract addresses request failed: fetch failed"
+    },
+    {
+      "name": "Full WalletManager Initialization (testnet)",
+      "duration": 735.4618090000004,
+      "phases": {
+        "Constructor": 0.47960299999976996,
+        "Initialize": 734.9822060000006
+      },
+      "success": true
+    }
+  ],
+  "summary": {
+    "averageDuration": 629.3133473333335,
+    "minDuration": 433.19873299999995,
+    "maxDuration": 735.4618090000004,
+    "totalTests": 6,
+    "successfulTests": 3
+  }
+}

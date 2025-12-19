@@ -25,6 +25,7 @@ export class BoltzWebSocket {
 	private subscribedSwaps: Set<string> = new Set();
 	private callbacks: Map<string, (event: SwapEvent) => void> = new Map();
 	private reconnectTimeoutId: NodeJS.Timeout | null = null;
+	private connectionPromise: Promise<void> | null = null;
 
 	constructor(endpoint: string = 'wss://api.boltz.exchange/v2/ws') {
 		this.endpoint = endpoint;
@@ -32,14 +33,27 @@ export class BoltzWebSocket {
 
 	/**
 	 * Connect to Boltz WebSocket
+	 * This method is idempotent - multiple calls will reuse the same connection
 	 */
 	async connect(): Promise<void> {
-		return new Promise((resolve, reject) => {
+		// If already connected, return immediately
+		if (this.ws?.readyState === WebSocket.OPEN) {
+			return Promise.resolve();
+		}
+
+		// If currently connecting, return the existing promise
+		if (this.ws?.readyState === WebSocket.CONNECTING && this.connectionPromise) {
+			return this.connectionPromise;
+		}
+
+		// Create new connection
+		this.connectionPromise = new Promise((resolve, reject) => {
 			try {
 				this.ws = new WebSocket(this.endpoint);
 
 				this.ws.onopen = () => {
 					this.reconnectAttempts = 0;
+					this.connectionPromise = null;
 					resolve();
 				};
 
@@ -49,17 +63,22 @@ export class BoltzWebSocket {
 				};
 
 				this.ws.onclose = () => {
+					this.connectionPromise = null;
 					this.handleReconnect();
 				};
 
 				this.ws.onerror = (error) => {
+					this.connectionPromise = null;
 					reject(error);
 				};
 
 			} catch (error) {
+				this.connectionPromise = null;
 				reject(error);
 			}
 		});
+
+		return this.connectionPromise;
 	}
 
 	/**
