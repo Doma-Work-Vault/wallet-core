@@ -1,6 +1,21 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import { BoltzWebSocket } from './WebSocketClient';
-import type { SwapEvent } from './types';
+
+// Polyfill CloseEvent for Node.js environment
+if (typeof CloseEvent === 'undefined') {
+  (global as any).CloseEvent = class CloseEvent extends Event {
+    code: number;
+    reason: string;
+    wasClean: boolean;
+
+    constructor(type: string, init?: { code?: number; reason?: string; wasClean?: boolean }) {
+      super(type);
+      this.code = init?.code ?? 1000;
+      this.reason = init?.reason ?? '';
+      this.wasClean = init?.wasClean ?? true;
+    }
+  };
+}
 
 // Mock WebSocket
 class MockWebSocket {
@@ -118,6 +133,60 @@ describe('BoltzWebSocket', () => {
 
       // Restore original
       (global as any).WebSocket = MockWebSocket;
+    });
+
+    it('should be idempotent - multiple connect calls should reuse connection', async () => {
+      // Track number of WebSocket instances created
+      let wsInstanceCount = 0;
+      const OriginalWebSocket = (global as any).WebSocket;
+      
+      const CountingWebSocket = class extends MockWebSocket {
+        constructor(url: string) {
+          super(url);
+          wsInstanceCount++;
+        }
+      };
+      (global as any).WebSocket = CountingWebSocket;
+
+      // Call connect multiple times
+      await ws.connect();
+      await ws.connect();
+      await ws.connect();
+
+      // Should only create one WebSocket instance
+      expect(wsInstanceCount).toBe(1);
+
+      // Restore original
+      (global as any).WebSocket = OriginalWebSocket;
+    });
+
+    it('should reuse pending connection promise when called concurrently', async () => {
+      // Track number of WebSocket instances created
+      let wsInstanceCount = 0;
+      const OriginalWebSocket = (global as any).WebSocket;
+      
+      const CountingWebSocket = class extends MockWebSocket {
+        constructor(url: string) {
+          super(url);
+          wsInstanceCount++;
+        }
+      };
+      (global as any).WebSocket = CountingWebSocket;
+
+      // Call connect concurrently (before first one completes)
+      const connectPromises = [
+        ws.connect(),
+        ws.connect(),
+        ws.connect()
+      ];
+
+      await Promise.all(connectPromises);
+
+      // Should only create one WebSocket instance even with concurrent calls
+      expect(wsInstanceCount).toBe(1);
+
+      // Restore original
+      (global as any).WebSocket = OriginalWebSocket;
     });
   });
 

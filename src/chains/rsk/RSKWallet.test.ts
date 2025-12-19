@@ -525,7 +525,6 @@ describe('RSKWallet', () => {
       expect(loadRSKTransactions).toHaveBeenCalledWith(
         address,
         provider,
-        'testnet'
       );
     });
 

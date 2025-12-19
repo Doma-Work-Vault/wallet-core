@@ -67,16 +67,61 @@ export async function loadBSCTransactions(
                             value: tx.value || '0',
                             gasUsed: tx.gasUsed?.toString() || '0',
                             gasPrice: tx.gasPrice?.toString() || '0',
+                            gasLimit: tx.gas?.toString() || '0',
                             blockNumber: parseInt(tx.blockNumber) || 0,
                             timestamp: parseInt(tx.timeStamp) * 1000,
                             status: tx.isError === '0' ? 'confirmed' : 'failed',
                             type: transactionType,
                             network: 'bsc',
+                            nonce: parseInt(tx.nonce) || 0,
+                            position: parseInt(tx.transactionIndex) || 0,
+                            confirmations: parseInt(tx.confirmations) || 0,
+                            
+                            // Contract interaction data
+                            rawInput: tx.input || '',
+                            method: tx.methodId || null,
+                            isContract: tx.isContract === '1',
+                            transactionTypes: tx.transactionTypes || (tx.input && tx.input !== '0x' ? ['contract_call'] : ['coin_transfer']),
+                            decodedInput: tx.decodedInput || null,
+                            tokenTransfers: tx.tokenTransfers || null,
+                            
+                            // Gas pricing data (EIP-1559)
+                            maxFeePerGas: tx.maxFeePerGas || null,
+                            maxPriorityFeePerGas: tx.maxPriorityFeePerGas || null,
+                            baseFeePerGas: tx.baseFeePerGas || null,
+                            priorityFee: tx.priorityFee || null,
+                            
+                            // Additional metadata
+                            result: tx.isError === '0' ? 'success' : 'failed',
+                            revertReason: tx.revertReason || null,
+                            createdContract: tx.contractAddress || null,
+                            isPendingUpdate: false,
+                            transactionType: tx.type ? parseInt(tx.type) : 0,
+                            hasErrorInInternalTransactions: false,
+                            
+                            // Fee information
+                            fee: {
+                                type: 'actual',
+                                value: (BigInt(tx.gasUsed || 0) * BigInt(tx.gasPrice || 0)).toString()
+                            },
+                            transactionBurntFee: tx.burntFees || null,
+                            
+                            // Exchange rates
+                            exchangeRate: null,
+                            historicExchangeRate: null,
+                            
+                            // Additional fields
+                            confirmationDuration: null,
+                            tokenTransfersOverflow: null,
+                            transactionTag: null,
+                            authorizationList: [],
+                            actions: [],
+                            
+                            // Legacy/backward compatibility fields
                             id: tx.hash,
                             asset: 'BNB',
                             formattedAmount: `${amount.toFixed(6)} BNB`,
                             description: transactionType === 'send' ? 'BSC BNB sent' : 'BSC BNB received',
-                            fee,
                             address: tx.to || '0x0000000000000000000000000000000000000000',
                             txHash: tx.hash
                         });
@@ -135,17 +180,62 @@ export async function loadBSCTransactions(
                                 value: tx.value || '0',
                                 gasUsed: tx.gasUsed?.toString() || '0',
                                 gasPrice: tx.gasPrice?.toString() || '0',
+                                gasLimit: tx.gas?.toString() || '0',
                                 blockNumber: parseInt(tx.blockNumber) || 0,
                                 timestamp: parseInt(tx.timeStamp) * 1000,
                                 status: tx.isError === '0' ? 'confirmed' : 'failed',
                                 type: transactionType,
                                 network: 'bsc',
+                                nonce: parseInt(tx.nonce) || 0,
+                                position: parseInt(tx.transactionIndex) || 0,
+                                confirmations: parseInt(tx.confirmations) || 0,
+                                
+                                // Contract interaction data
+                                rawInput: tx.input || '',
+                                method: tx.methodId || null,
+                                isContract: true, // Token transactions are always to contracts
+                                transactionTypes: tx.transactionTypes || ['token_transfer'],
+                                decodedInput: tx.decodedInput || null,
+                                tokenTransfers: tx.tokenTransfers || null,
+                                
+                                // Gas pricing data (EIP-1559)
+                                maxFeePerGas: tx.maxFeePerGas || null,
+                                maxPriorityFeePerGas: tx.maxPriorityFeePerGas || null,
+                                baseFeePerGas: tx.baseFeePerGas || null,
+                                priorityFee: tx.priorityFee || null,
+                                
+                                // Additional metadata
+                                result: tx.isError === '0' ? 'success' : 'failed',
+                                revertReason: tx.revertReason || null,
+                                createdContract: tx.contractAddress || null,
+                                isPendingUpdate: false,
+                                transactionType: tx.type ? parseInt(tx.type) : 0,
+                                hasErrorInInternalTransactions: false,
+                                
+                                // Fee information
+                                fee: {
+                                    type: 'actual',
+                                    value: (BigInt(tx.gasUsed || 0) * BigInt(tx.gasPrice || 0)).toString()
+                                },
+                                transactionBurntFee: tx.burntFees || null,
+                                
+                                // Exchange rates
+                                exchangeRate: null,
+                                historicExchangeRate: null,
+                                
+                                // Additional fields
+                                confirmationDuration: null,
+                                tokenTransfersOverflow: null,
+                                transactionTag: null,
+                                authorizationList: [],
+                                actions: [],
+                                
+                                // Legacy/backward compatibility fields
                                 tokenSymbol,
                                 id: tx.hash,
                                 asset: tokenSymbol,
                                 formattedAmount: `${amount.toFixed(6)} ${tokenSymbol}`,
                                 description: transactionType === 'send' ? `BSC ${tokenSymbol} sent` : `BSC ${tokenSymbol} received`,
-                                fee,
                                 address: tx.to || '0x0000000000000000000000000000000000000000',
                                 txHash: tx.hash
                             });

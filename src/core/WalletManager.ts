@@ -28,23 +28,23 @@ import { BoltzClient } from '../swaps/boltz/BoltzClient';
 export interface WalletManagerConfig {
 	/** Network type: 'mainnet' or 'testnet' */
 	network: NetworkType;
-	
+
 	/** Wallet mnemonic phrase (12 or 24 words) */
 	mnemonic: string;
-	
+
 	/** Optional RSK wallet configuration overrides */
 	rskConfig?: Partial<RSKWalletConfig>;
-	
+
 	/** Optional BSC wallet configuration overrides */
 	bscConfig?: Partial<BSCWalletConfig>;
-	
+
 	/** 
 	 * Optional swap storage adapter (e.g., Nostr, IndexedDB, localStorage)
 	 * If provided, all swap services will use this storage.
 	 * For separate storage per service, use swapStorages instead.
 	 */
 	swapStorage?: SwapStorage;
-	
+
 	/**
 	 * Optional separate storage for each swap service
 	 * If provided, this takes precedence over swapStorage
@@ -97,18 +97,13 @@ export class WalletManager {
 	private _submarineSwapService: SubmarineSwapService | null = null;
 	constructor(config: WalletManagerConfig) {
 		this.config = config;
-		
+
 		// Set global network getter so all SDK functions can access the network
 		setNetworkGetter(() => this.config.network);
-		
-		// Only create lightweight instances - defer heavy initialization
-		// WebSocket instance is lightweight (just stores endpoint)
+
 		this._websocket = new BoltzWebSocket(getWebSocketEndpoint());
-		
-		// Don't create services here - create them lazily when accessed
-		// This defers heavy object creation and dependency resolution
 	}
-	
+
 	/**
 	 * Initialize all wallet components
 	 * This should be called after construction
@@ -116,7 +111,7 @@ export class WalletManager {
 	async initialize(): Promise<void> {
 		// Initialize wallets in parallel for better performance
 		const bscNetwork = (this.config.network === 'regtest' ? 'testnet' : this.config.network) as 'mainnet' | 'testnet';
-		
+
 		const [rskWallet, bscWallet] = await Promise.all([
 			(async () => {
 				const wallet = new RSKWallet({
@@ -135,26 +130,15 @@ export class WalletManager {
 				return wallet;
 			})()
 		]);
-		
+
 		this._rskWallet = rskWallet;
 		this._bscWallet = bscWallet;
-		
-		// Set wallet getters for swap services (lazy-loaded, so check if they exist)
-		if (this._reverseSwapService) {
-			this._reverseSwapService.setWalletGetter(() => this._rskWallet!.getWallet());
-		}
-		
-		if (this._chainSwapService) {
-			this._chainSwapService.setWalletGetter(() => this._rskWallet!.getWallet());
-		}
-		
-		// Don't connect WebSocket during initialization - connect lazily when needed
-		// This saves ~0.5-2 seconds during init
-		
-		// Recover pending swaps
-		// await this.recoverPendingSwaps();
+
+		// Websocket connection is required for swap monitoring 
+		// Lazy loading won't work for wallet getters (asynchronous limitation)
+		await this.connectWebSocket();
 	}
-	
+
 	/**
 	 * Connect WebSocket for real-time swap monitoring
 	 * This is called lazily when swap services are accessed
@@ -168,16 +152,10 @@ export class WalletManager {
 		} catch (error) {
 			// Silently fail - connection will be retried when needed
 			// This allows initialization to proceed even if WebSocket is unavailable
+			console.warn('⚠️ Failed to connect WebSocket for swap monitoring:', error);
 		}
 	}
-	
-	/**
-	 * Connect WebSocket for swap monitoring (public method for manual connection)
-	 */
-	async connectSwapMonitoring(): Promise<void> {
-		await this.connectWebSocket();
-	}
-	
+
 	/**
 	 * Get RSK wallet instance
 	 */
@@ -187,7 +165,7 @@ export class WalletManager {
 		}
 		return this._rskWallet;
 	}
-	
+
 	/**
 	 * Get BSC wallet instance
 	 */
@@ -207,76 +185,79 @@ export class WalletManager {
 		}
 		return this._boltzClient;
 	}
-	
+
 	/**
 	 * Get reverse swap service (Lightning → RBTC) - lazy-loaded
 	 */
 	get reverseSwapService(): ReverseSwapService {
 		if (!this._reverseSwapService) {
+			// Ensure WebSocket is connected
+			this.connectWebSocket();
+			if (!this._websocket) throw new Error('WebSocket not connected');
+
 			// Lazy-load EVM contract service if needed
 			if (!this._evmContractService) {
 				this._evmContractService = new EvmContractService(this.boltzClient);
 			}
-			// Connect WebSocket asynchronously (non-blocking)
-			this.connectWebSocket().catch(() => {
-				// Ignore connection errors - will retry when needed
-			});
+
 			this._reverseSwapService = new ReverseSwapService(
-				this._websocket!,
+				this._websocket,
 				this.boltzClient,
 				this._evmContractService,
 				this.config.swapStorages?.reverse || this.config.swapStorage
 			);
 			// Set wallet getter if wallet is initialized
-			if (this._rskWallet) {
-				this._reverseSwapService.setWalletGetter(() => this._rskWallet!.getWallet());
+			if (this.rskWallet) {
+				this._reverseSwapService.setWalletGetter(() => this.rskWallet.getWallet());
 			}
 		}
 		return this._reverseSwapService;
 	}
-	
+
 	/**
 	 * Get chain swap service (L-BTC → RBTC) - lazy-loaded
 	 */
 	get chainSwapService(): ChainSwapService {
 		if (!this._chainSwapService) {
+			// Ensure WebSocket is connected
+			this.connectWebSocket();
+			if (!this._websocket) throw new Error('WebSocket not connected');
+
 			// Lazy-load EVM contract service if needed
 			if (!this._evmContractService) {
 				this._evmContractService = new EvmContractService(this.boltzClient);
 			}
-			// Connect WebSocket asynchronously (non-blocking)
-			this.connectWebSocket().catch(() => {
-				// Ignore connection errors - will retry when needed
-			});
+
 			this._chainSwapService = new ChainSwapService(
-				this._websocket!,
+				this._websocket,
 				this.boltzClient,
 				this._evmContractService,
 				this.config.swapStorages?.chain || this.config.swapStorage
 			);
 			// Set wallet getter if wallet is initialized
-			if (this._rskWallet) {
-				this._chainSwapService.setWalletGetter(() => this._rskWallet!.getWallet());
+			if (this.rskWallet) {
+				this._chainSwapService.setWalletGetter(() => this.rskWallet.getWallet());
 			}
 		}
 		return this._chainSwapService;
 	}
-	
+
 	/**
 	 * Get submarine swap service (RBTC/BTC/L-BTC → Lightning) - lazy-loaded
 	 */
 	get submarineSwapService(): SubmarineSwapService {
 		if (!this._submarineSwapService) {
+			// Connect WebSocket asynchronously (non-blocking)
+			this.connectWebSocket();
+			if (!this._websocket) throw new Error('WebSocket not connected');
+
 			// Lazy-load EVM contract service if needed
 			if (!this._evmContractService) {
 				this._evmContractService = new EvmContractService(this.boltzClient);
 			}
-			// Connect WebSocket asynchronously (non-blocking)
-			this.connectWebSocket().catch(() => {
-				// Ignore connection errors - will retry when needed
-			});
+
 			this._submarineSwapService = new SubmarineSwapService(
-				this._websocket!,
+				this._websocket,
 				this.boltzClient,
 				this._evmContractService,
 				this.config.swapStorages?.submarine || this.config.swapStorage
@@ -284,7 +265,7 @@ export class WalletManager {
 		}
 		return this._submarineSwapService;
 	}
-	
+
 	/**
 	 * Get EVM contract service for direct contract interactions - lazy-loaded
 	 * Useful for gas estimation and advanced contract operations
@@ -295,14 +276,14 @@ export class WalletManager {
 		}
 		return this._evmContractService;
 	}
-	
+
 	/**
 	 * Get all wallet balances
 	 */
 	async getBalances(): Promise<WalletBalances> {
 		const rskBalance = await this.rskWallet.getBalance();
 		const bscBalances = await this.bscWallet.getBalances();
-		
+
 		return {
 			rsk: {
 				rbtc: rskBalance.formatted,
@@ -314,7 +295,7 @@ export class WalletManager {
 			}
 		};
 	}
-	
+
 	/**
 	 * Get swap limits for all swap types
 	 */
@@ -322,14 +303,14 @@ export class WalletManager {
 		const lightningLimits = await this.reverseSwapService.getSwapLimits();
 		const liquidLimits = await this.chainSwapService.getSwapLimits();
 		const submarineLimits = await this.submarineSwapService.getSwapLimits('RBTC', 'BTC');
-		
+
 		return {
 			lightning: lightningLimits,
 			liquid: liquidLimits,
 			submarine: submarineLimits
 		};
 	}
-	
+
 	/**
 	 * Get wallet addresses
 	 */
@@ -342,36 +323,30 @@ export class WalletManager {
 			bsc: this.bscWallet.getAddress()
 		};
 	}
-	
+
 	/**
 	 * Get RSK wallet (ethers.Wallet) for advanced use cases
 	 */
 	getRSKWallet(): Signer {
 		return this.rskWallet.getWallet();
 	}
-	
+
 	/**
 	 * Get BSC wallet (ethers.Wallet) for advanced use cases
 	 */
 	getBSCWallet(): Signer {
 		return this.bscWallet.getWallet();
 	}
-	
+
 	/**
 	 * Clean up resources
 	 */
 	async dispose(): Promise<void> {
 		// Clean up wallets
-		if (this._rskWallet) {
-			// RSKWallet cleanup if needed
-		}
-		
-		if (this._bscWallet) {
-			// BSCWallet cleanup if needed
-		}
-		
-		// Clean up swap services
-		// WebSocket connections are managed by services themselves
+		if (this._rskWallet) this._rskWallet.disconnect();
+		if (this._bscWallet) this._bscWallet.disconnect();
+
+		// Clean up WebSocket
+		if (this._websocket) this._websocket.disconnect();
 	}
 }
-

@@ -58,9 +58,6 @@ export class BSCWallet {
             const hdNode = ethers.HDNodeWallet.fromPhrase(mnemonic, undefined, "m/44'/60'/0'/0/0");
             this.wallet = new ethers.Wallet(hdNode.privateKey, this.provider);
 
-            // Don't test RPC connection during initialization for faster init
-            // Connection will be tested on first use (getBlockNumber, getBalance, etc.)
-
             // Initialize USDT contract
             const usdtToken = getUSDTToken();
             if (usdtToken) {

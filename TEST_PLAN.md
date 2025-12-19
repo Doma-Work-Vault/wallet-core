@@ -546,7 +546,7 @@ This document outlines a comprehensive plan to implement a full unit test suite 
    - ✅ `getSwapLimits()` lazy-loads services
 
 8. **WebSocket Connection**
-   - ✅ `connectSwapMonitoring()` connects WebSocket
+   - ✅ `connectWebSocket()` connects WebSocket
    - ✅ WebSocket connects lazily when services accessed
 
 9. **Cleanup**
