@@ -26,73 +26,91 @@ export interface PaymasterConfig {
     usdtPriceOracle: string;
 }
 
-// Transaction types
+// Address entity from RSK Explorer API
+export interface AddressEntity {
+    ens_domain_name: string | null;
+    hash: string;
+    implementations: any[];
+    is_contract: boolean;
+    is_scam: boolean;
+    is_verified: boolean;
+    metadata: any | null;
+    name: string | null;
+    private_tags: string[];
+    proxy_type: string | null;
+    public_tags: string[];
+    reputation: string;
+    watchlist_names: string[];
+}
+
+// Decoded input parameter from Explorer API
+export interface DecodedInputParameter {
+    name: string;
+    type: string;
+    value: string | number | boolean;
+}
+
+// Decoded input from Explorer API
+export interface DecodedInput {
+    method_call: string;
+    method_id: string;
+    parameters: DecodedInputParameter[];
+}
+
+// Explorer API Transaction Response
 export interface Transaction {
     hash: string;
-    from: string;
-    to: string;
+    from: AddressEntity;
+    to: AddressEntity;
     value: string;
-    gasUsed: string;
-    gasPrice: string;
-    gasLimit: string;
-    blockNumber: number;
-    timestamp: number;
-    status: 'pending' | 'confirmed' | 'failed';
-    type: 'send' | 'receive' | 'contract' | 'swap';
-    network: 'rsk' | 'bsc';
+    gas_used: string;
+    gas_price: string;
+    gas_limit: string;
+    block_number: number;
+    timestamp: string; // ISO 8601 format
+    status: string; // "ok" or error status
     nonce: number;
     position: number;
     confirmations: number;
     
-    // Contract interaction data (always present in API response)
-    rawInput: string;              // raw_input from API - contract function call data
-    method: string | null;         // method selector from API (first 4 bytes of input)
-    isContract: boolean;           // to.is_contract from API - indicates if recipient is a contract
-    transactionTypes: string[];    // transaction_types from API (e.g., ["coin_transfer", "contract_call"])
-    decodedInput: any;             // decoded_input from API
-    tokenTransfers: any[] | null;  // token_transfers from API (for ERC-20/token txs)
+    // Contract interaction data
+    raw_input: string; // raw_input from API - contract function call data
+    method: string | null; // method selector from API (first 4 bytes of input)
+    decoded_input: DecodedInput | null;
+    transaction_types: string[]; // transaction_types from API (e.g., ["coin_transfer", "contract_call"])
+    token_transfers: any[] | null; // token_transfers from API (for ERC-20/token txs)
     
-    // Gas pricing data (EIP-1559 - null for legacy transactions)
-    maxFeePerGas: string | null;         // max_fee_per_gas for EIP-1559 transactions
-    maxPriorityFeePerGas: string | null; // max_priority_fee_per_gas for EIP-1559
-    baseFeePerGas: string | null;        // base_fee_per_gas for EIP-1559
-    priorityFee: string | null;          // priority_fee from API
+    // Gas pricing data (EIP-1559)
+    max_fee_per_gas: string | null;
+    max_priority_fee_per_gas: string | null;
+    base_fee_per_gas: string | null;
+    priority_fee: string | null;
+    transaction_burnt_fee: string | null;
     
-    // Additional metadata (always present in API response)
-    result: string;                      // result: "success" or error message
-    revertReason: string | null;         // revert_reason if transaction failed
-    createdContract: string | null;      // created_contract address if this tx deployed a contract
-    isPendingUpdate: boolean;            // is_pending_update from API
-    transactionType: number;             // type: 0 (legacy), 1 (EIP-2930), 2 (EIP-1559)
-    hasErrorInInternalTransactions: boolean; // has_error_in_internal_transactions
+    // Additional metadata
+    result: string; // result: "success" or error message
+    revert_reason: string | null; // revert_reason if transaction failed
+    created_contract: string | null; // created_contract address if this tx deployed a contract
+    is_pending_update: boolean;
+    type: number; // 0 (legacy), 1 (EIP-2930), 2 (EIP-1559)
+    has_error_in_internal_transactions: boolean;
     
     // Fee information
     fee: {
         type: string;   // "actual" or "maximum"
         value: string;  // fee in wei
     };
-    transactionBurntFee: string | null;  // transaction_burnt_fee (EIP-1559)
     
     // Exchange rates
-    exchangeRate: string | null;         // exchange_rate at current time
-    historicExchangeRate: string | null; // historic_exchange_rate at transaction time
+    exchange_rate: string | null; // exchange_rate at current time
+    historic_exchange_rate: string | null; // historic_exchange_rate at transaction time
     
     // Additional fields
-    confirmationDuration: [number, number] | null; // confirmation_duration [seconds, microseconds]
-    tokenTransfersOverflow: boolean | null;        // token_transfers_overflow
-    transactionTag: string | null;                 // transaction_tag from API
-    authorizationList: any[];                      // authorization_list (EIP-7702)
-    actions: any[];                                // actions array from API
-    
-    // Legacy/backward compatibility fields (optional)
-    tokenSymbol?: string;
-    swapType?: 'chain' | 'reverse';
-    description?: string;
-    formattedAmount?: string;
-    asset?: string;
-    id?: string;
-    address?: string;
-    txHash?: string;
+    confirmation_duration: [number, number] | null; // confirmation_duration [seconds, milliseconds]
+    token_transfers_overflow: boolean | null;
+    transaction_tag: string | null;
+    authorization_list: any[];
+    actions: any[];
 }
 
 // Gas estimation result

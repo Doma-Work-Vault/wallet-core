@@ -198,18 +198,28 @@ const txHash = await walletManager.bscWallet.sendUSDT(
 ### Load Transaction History
 
 ```typescript
-// Load RSK transactions
+// Load RSK transactions (returns raw API format)
 const rskTxs = await walletManager.rskWallet.loadTransactions();
 rskTxs.forEach(tx => {
   console.log('Hash:', tx.hash);
-  console.log('From:', tx.from);
-  console.log('To:', tx.to);
+  console.log('From:', tx.from.hash); // Address objects
+  console.log('To:', tx.to.hash);
   console.log('Value:', tx.value);
-  console.log('Status:', tx.status);
+  console.log('Status:', tx.status); // "ok" or error status
+  console.log('Timestamp:', tx.timestamp); // ISO 8601 format
+  console.log('Method:', tx.method); // Contract method if applicable
 });
 
-// Load BSC transactions
+// Load BSC transactions (returns same raw API format)
 const bscTxs = await walletManager.bscWallet.loadTransactions();
+bscTxs.forEach(tx => {
+  console.log('Hash:', tx.hash);
+  console.log('From:', tx.from.hash); // Same structure
+  console.log('To:', tx.to.hash);
+  console.log('Value:', tx.value);
+  console.log('Status:', tx.status);
+  console.log('Method:', tx.method);
+});
 ```
 
 ### Lightning Swaps (Reverse Swaps)

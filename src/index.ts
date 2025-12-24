@@ -19,7 +19,7 @@ export type {
 
 // Chain wallets
 export { RSKWallet } from './chains/rsk/RSKWallet';
-export { loadRSKTransactions } from './chains/rsk/RSKTransactions';
+export { loadRSKTransactions, getSwapAddress } from './chains/rsk/RSKTransactions';
 export { BSCWallet } from './chains/bsc/BSCWallet';
 export { loadBSCTransactions } from './chains/bsc/BSCTransactions';
 export { BSCPaymasterContract, PostOpMode } from './chains/bsc/BSCPaymaster';
