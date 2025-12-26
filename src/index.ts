@@ -4,7 +4,8 @@
  */
 
 // Core exports
-export { EventEmitter } from './core/EventEmitter';
+export { EventBus } from './core/EventBus';
+export type { EventCallback } from './core/EventBus';
 export type {
     WalletState,
     Transaction,
@@ -96,6 +97,7 @@ export type {
     ChainSwapStatus,
     SubmarineSwapStatus,
     SwapEvent,
+    SwapUpdateEvent,
     ContractAddresses,
     CreateSubmarineSwapParams,
     SubmarineSwapResult,

@@ -17,22 +17,22 @@ This document outlines a comprehensive plan to implement a full unit test suite 
 **Status**: Must complete before moving to Group 2
 
 **Files to Test:**
-- `src/core/EventEmitter.ts`
+- `src/core/EventBus.ts`
 - `src/core/types.ts` (type validation tests)
 - `src/swaps/boltz/storage.ts` (InMemorySwapStorage)
 
 **Test Coverage:**
-1. **EventEmitter**
-   - ✅ Constructor with initial state
-   - ✅ `getState()` returns current state
-   - ✅ `setState()` with partial update
-   - ✅ `setState()` with updater function
-   - ✅ `subscribe()` adds listener and calls immediately
-   - ✅ `subscribe()` returns unsubscribe function
-   - ✅ Unsubscribe removes listener
-   - ✅ State changes notify all listeners
-   - ✅ Multiple listeners receive updates
-   - ✅ Unsubscribed listeners don't receive updates
+1. **EventBus**
+   - ✅ `on()` subscribes to events
+   - ✅ `emit()` triggers callbacks
+   - ✅ `on()` returns unsubscribe function
+   - ✅ `off()` unsubscribes listener
+   - ✅ Multiple listeners receive events
+   - ✅ Error in one listener doesn't break others
+   - ✅ `clear()` removes all listeners
+   - ✅ `listenerCount()` returns correct count
+   - ✅ Separate listener sets for different events
+   - ✅ Type-safe event handling
 
 2. **Types** (Type validation/guards if any)
    - ✅ NetworkType validation
@@ -649,7 +649,7 @@ npm run test:watch
 npm run test:coverage
 
 # Run specific test file
-npm test -- src/core/EventEmitter.test.ts
+npm test -- src/core/EventBus.test.ts
 
 # Run tests for a specific group
 npm test -- src/core/

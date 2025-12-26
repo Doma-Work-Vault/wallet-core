@@ -473,7 +473,7 @@ describe('ReverseSwapService', () => {
       const result = await service.claimRBTC(swapData, mockSigner);
 
       expect(result.txHash).toBe('0x' + 'c'.repeat(64));
-      expect(swapData.status).toBe('claimed');
+      expect(swapData.status).toBe('transaction.claimed');
       expect(swapData.claimTxHash).toBe('0x' + 'c'.repeat(64));
       expect(mockEvmContractService.claimFunds).toHaveBeenCalled();
       expect(mockStorage.save).toHaveBeenCalled();
@@ -547,7 +547,7 @@ describe('ReverseSwapService', () => {
       const result = await service.claimRBTCViaRifRelay(swapData, mockSigner);
 
       expect(result.txHash).toBe('0x' + 'r'.repeat(64));
-      expect(swapData.status).toBe('claimed');
+      expect(swapData.status).toBe('transaction.claimed');
       expect(swapData.claimTxHash).toBe('0x' + 'r'.repeat(64));
       expect(claimSpy).toHaveBeenCalled();
       expect(mockStorage.save).toHaveBeenCalled();

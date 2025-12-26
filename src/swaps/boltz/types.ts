@@ -398,6 +398,19 @@ export interface SwapEvent {
  */
 export type SwapEventCallback = (event: SwapEvent) => void;
 
+/**
+ * Event emitted to clients when swap status changes
+ * Includes full swap data so clients don't need to make additional calls
+ */
+export interface SwapUpdateEvent {
+	swapId: string;
+	status: SwapStatusType;
+	timestamp: Date;
+	swapData: BoltzSwapData | ChainSwapData | SubmarineSwapData;
+	transaction?: SwapTransaction;
+	failureReason?: string;
+}
+
 // ============================================================================
 // Boltz Swap Types
 // ============================================================================

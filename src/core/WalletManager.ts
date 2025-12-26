@@ -15,6 +15,7 @@ import type { NetworkType } from './types';
 import type { SwapStorage } from '../swaps/boltz/storage';
 import type { RSKWalletConfig } from '../chains/rsk/RSKWallet';
 import type { BSCWalletConfig } from '../chains/bsc/BSCWallet';
+import type { SwapUpdateEvent } from '../swaps/boltz/types';
 import { setNetworkGetter, getWebSocketEndpoint } from '../utils/networkConfig';
 import { RSKWallet } from '../chains/rsk/RSKWallet';
 import { BSCWallet } from '../chains/bsc/BSCWallet';
@@ -339,7 +340,37 @@ export class WalletManager {
 	}
 
 	/**
-	 * Clean up resources
+	 * Subscribe to swap updates from ALL swap services
+	 * Convenience method for clients that want to monitor all swaps
+	 * 
+	 * @param callback - Function called when any swap updates
+	 * @returns Unsubscribe function that removes all listeners
+	 * 
+	 * @example
+	 * const unsubscribe = manager.onSwapUpdate((event) => {
+	 *   console.log('Swap updated:', event.swapId, event.status);
+	 *   updateUI(event.swapData);
+	 * });
+	 * 
+	 * // Later, cleanup
+	 * unsubscribe();
+	 */
+	public onSwapUpdate(callback: (event: SwapUpdateEvent) => void): () => void {
+		// Subscribe to all three services
+		const unsubscribers = [
+			this.reverseSwapService.events.on('swap.update', callback),
+			this.chainSwapService.events.on('swap.update', callback),
+			this.submarineSwapService.events.on('swap.update', callback)
+		];
+
+		// Return combined unsubscribe function
+		return () => {
+			unsubscribers.forEach(unsub => unsub());
+		};
+	}
+
+	/**
+	 * Clean up resources including event listeners
 	 */
 	async dispose(): Promise<void> {
 		// Clean up wallets
@@ -348,5 +379,10 @@ export class WalletManager {
 
 		// Clean up WebSocket
 		if (this._websocket) this._websocket.disconnect();
+
+		// Clean up event listeners
+		if (this._reverseSwapService) this._reverseSwapService.events.clear();
+		if (this._chainSwapService) this._chainSwapService.events.clear();
+		if (this._submarineSwapService) this._submarineSwapService.events.clear();
 	}
 }

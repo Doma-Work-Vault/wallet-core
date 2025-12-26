@@ -36,7 +36,7 @@
  */
 
 import type { SwapStorage } from './storage';
-import type { SwapEvent, BoltzSwapData } from './types';
+import type { SwapEvent, BoltzSwapData, SwapUpdateEvent } from './types';
 import { ethers } from 'ethers';
 import { randomBytes } from 'crypto';
 import { crypto } from 'bitcoinjs-lib';
@@ -46,6 +46,7 @@ import { getSmartWalletAddress } from '../rif/Signer';
 import { EvmContractService } from './EvmContractService';
 import { RifRelayClaimService } from './RifRelayClaimService';
 import { isRifRelayAvailable, weiToSatoshi } from '../../utils/networkConfig';
+import { EventBus } from '../../core/EventBus';
 
 
 // Reference: https://github.com/BoltzExchange/boltz-core/blob/master/contracts/EtherSwap.sol
@@ -59,6 +60,8 @@ export class ReverseSwapService {
 	private walletGetter: (() => any) | null = null;
 	private storage?: SwapStorage;
 	private claimingSwaps: Set<string> = new Set();
+	
+	public events = new EventBus();
 
 	constructor(websocket: BoltzWebSocket, boltzClient: BoltzClient, evmContractService: EvmContractService, storage?: SwapStorage) {
 		this.boltzClient = boltzClient;
@@ -231,10 +234,16 @@ export class ReverseSwapService {
 
 	/**
 	 * Handle swap status updates from WebSocket
+	 * @param event - Swap event from WebSocket
+	 * @param skipSave - If true, skip saving to storage (used during recovery)
 	 */
-	private async handleSwapUpdate(event: SwapEvent): Promise<void> {
+	private async handleSwapUpdate(event: SwapEvent, skipSave = false): Promise<void> {
 		const swapData = this.activeSwaps.get(event.swapId);
 		if (!swapData) return;
+
+		// Track changes for conditional saving
+		const previousStatus = swapData.status;
+		const hadLockupTx = !!swapData.lockupTxHash;
 
 		// Update swap data
 		swapData.status = event.status;
@@ -248,14 +257,12 @@ export class ReverseSwapService {
 		switch (event.status) {
 			case 'invoice.set':
 				// Invoice has been paid and is on hold - waiting for our claim
-				swapData.status = 'invoice.set';
 				break;
 
 			case 'transaction.mempool':
 				// Boltz's lockup transaction is in mempool
 				// ⚠️ IMPORTANT: We should NOT attempt to claim yet because the lockup
 				// transaction hasn't been mined. The contract doesn't have the swap data yet.
-				swapData.status = 'transaction.mempool';
 				break;
 
 			case 'transaction.confirmed':
@@ -270,8 +277,8 @@ export class ReverseSwapService {
 				const wallet = this.walletGetter?.();
 
 				if (!wallet) {
-					swapData.status = 'transaction.confirmed';
-					if (this.storage) {
+					// No wallet available - save state and wait
+					if (this.storage && !skipSave) {
 						await this.storage.save(swapData.id, swapData);
 					}
 					break;
@@ -335,11 +342,9 @@ export class ReverseSwapService {
 
 					if (!claimSuccessful) {
 						console.warn('⚠️ All claim methods failed');
-						swapData.status = 'transaction.confirmed';
 					}
 				} catch (err) {
 					console.error('❌ Claim process failed:', err);
-					swapData.status = 'transaction.confirmed';
 				} finally {
 					// Always remove from claiming set
 					this.claimingSwaps.delete(swapData.id);
@@ -347,21 +352,34 @@ export class ReverseSwapService {
 				break;
 
 			case 'invoice.settled':
-				swapData.status = 'invoice.settled';
 				break;
 
 			case 'invoice.expired':
 			case 'swap.expired':
 			case 'transaction.failed':
 				console.error('❌ Swap failed:', swapData.id, event.status);
-				swapData.status = event.status;
 				break;
 		}
 
-		// Update Nostr storage using shared module
-		if (this.storage) {
+		// Determine if we should save to storage
+		const hasChanges = 
+			previousStatus !== swapData.status || 
+			(!hadLockupTx && swapData.lockupTxHash);
+
+		// Save to storage only if there are changes and not skipped
+		if (this.storage && !skipSave && hasChanges) {
 			await this.storage.save(swapData.id, swapData);
 		}
+
+		// Emit event to clients
+		this.events.emit('swap.update', {
+			swapId: event.swapId,
+			status: event.status,
+			timestamp: new Date(),
+			swapData: swapData,
+			transaction: event.transaction,
+			failureReason: event.failureReason
+		} as SwapUpdateEvent);
 	}
 
 
@@ -446,7 +464,7 @@ export class ReverseSwapService {
 				await this.rifRelayService.waitForConfirmation(txHash, walletSigner.provider);
 			}
 
-			swapData.status = 'claimed';
+			swapData.status = 'transaction.claimed';
 			swapData.updatedAt = Date.now();
 			if (this.storage) {
 				await this.storage.save(swapData.id, swapData);
@@ -460,6 +478,7 @@ export class ReverseSwapService {
 			if (this.storage) {
 				await this.storage.save(swapData.id, swapData);
 			}
+
 			throw error;
 		}
 	}
@@ -585,7 +604,7 @@ export class ReverseSwapService {
 
 			// Update swap data with claim transaction hash
 			swapData.claimTxHash = result.txHash;
-			swapData.status = 'claimed';
+			swapData.status = 'transaction.claimed';
 			swapData.updatedAt = Date.now();
 
 			if (this.storage) {
@@ -635,9 +654,9 @@ export class ReverseSwapService {
 			for (const swap of swaps) {
 				this.activeSwaps.set(swap.id, swap as BoltzSwapData);
 
-				// Resubscribe to WebSocket
+				// Resubscribe to WebSocket with skipSave = true to avoid re-saving during recovery
 				this.websocket.subscribeToSwap(swap.id, async (event) => {
-					await this.handleSwapUpdate(event);
+					await this.handleSwapUpdate(event, true);
 				});
 			}
 

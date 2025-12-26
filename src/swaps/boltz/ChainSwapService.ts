@@ -38,8 +38,7 @@
  */
 
 import type { SwapStorage } from './storage';
-import type { NetworkType } from '../../core/types';
-import type { SwapEvent, ChainSwapStatus, ChainSwapData } from './types';
+import type { SwapEvent, ChainSwapStatus, ChainSwapData, SwapUpdateEvent } from './types';
 import { ethers } from 'ethers';
 import { randomBytes } from 'crypto';
 import { ECPairFactory } from 'ecpair';
@@ -51,6 +50,7 @@ import { EvmContractService } from './EvmContractService';
 import { RifRelayClaimService } from './RifRelayClaimService';
 import { ChainSwapRefundService } from './ChainSwapRefundService';
 import { getLiquidAssetId, isRifRelayAvailable, weiToSatoshi } from '../../utils/networkConfig';
+import { EventBus } from '../../core/EventBus';
 import * as ecc from 'tiny-secp256k1';
 
 const ECPair = ECPairFactory(ecc);
@@ -65,7 +65,9 @@ export class ChainSwapService {
 	private walletGetter: (() => any) | null = null;
 	private storage?: SwapStorage;
 	private claimingSwaps: Set<string> = new Set();
-
+	
+	public events = new EventBus();
+	
 	constructor(websocket: BoltzWebSocket, boltzClient: BoltzClient, evmContractService: EvmContractService, storage?: SwapStorage) {
 		this.boltzClient = boltzClient;
 		this.evmContractService = evmContractService;
@@ -125,7 +127,7 @@ export class ChainSwapService {
 
 	/**
 	 * Generate Liquid payment URI (BIP21 format)
-	 * Format: liquidnetwork:ADDRESS?amount=AMOUNT&assetid=ASSETID&blindingkey=KEY
+	 * Format: ADDRESS?amount=AMOUNT&assetid=ASSETID&blindingkey=KEY
 	 */
 	private generateLiquidPaymentUri(
 		lockupAddress: string,
@@ -135,7 +137,7 @@ export class ChainSwapService {
 		const amountBTC = amountSats / 100000000;
 		// Get L-BTC asset ID for current network
 		const lbtcAssetId = getLiquidAssetId('LBTC');
-		return `liquidnetwork:${lockupAddress}?amount=${amountBTC}&assetid=${lbtcAssetId}&blindingkey=${blindingKey}`;
+		return `${lockupAddress}?amount=${amountBTC}&assetid=${lbtcAssetId}&blindingkey=${blindingKey}`;
 	}
 
 	/**
@@ -283,13 +285,21 @@ export class ChainSwapService {
 
 	/**
 	 * Handle swap status updates from WebSocket
+	 * @param event - Swap event from WebSocket
+	 * @param skipSave - If true, skip saving to storage (used during recovery)
 	 */
-	private async handleSwapUpdate(event: SwapEvent): Promise<void> {
+	private async handleSwapUpdate(event: SwapEvent, skipSave = false): Promise<void> {
 		const swapData = this.activeSwaps.get(event.swapId);
 		if (!swapData) {
 			console.warn('⚠️ Received update for unknown swap:', event.swapId);
 			return;
 		}
+
+		// Track changes for conditional saving
+		const previousStatus = swapData.status;
+		const hadLockupTx = !!swapData.lockupTxHash;
+		const hadServerLockupTx = !!swapData.serverLockupTxHash;
+		const hadClaimTx = !!swapData.claimTxHash;
 
 		swapData.status = event.status as ChainSwapStatus;
 		swapData.updatedAt = Date.now();
@@ -339,10 +349,27 @@ export class ChainSwapService {
 				break;
 		}
 
-		// Update Nostr storage using shared module
-		if (this.storage) {
+		// Determine if we should save to storage
+		const hasChanges = 
+			previousStatus !== swapData.status || 
+			(!hadLockupTx && swapData.lockupTxHash) ||
+			(!hadServerLockupTx && swapData.serverLockupTxHash) ||
+			(!hadClaimTx && swapData.claimTxHash);
+
+		// Save to storage only if there are changes and not skipped
+		if (this.storage && !skipSave && hasChanges) {
 			await this.storage.save(swapData.id, swapData);
 		}
+
+		// Emit event to clients
+		this.events.emit('swap.update', {
+			swapId: event.swapId,
+			status: event.status,
+			timestamp: new Date(),
+			swapData: swapData,
+			transaction: event.transaction,
+			failureReason: event.failureReason
+		} as SwapUpdateEvent);
 	}
 
 	/**
@@ -497,6 +524,7 @@ export class ChainSwapService {
 			if (this.storage) {
 				await this.storage.save(swapData.id, swapData);
 			}
+
 			throw error;
 		}
 	}
@@ -592,8 +620,8 @@ export class ChainSwapService {
 					this.activeSwaps.set(swap.id, swap as ChainSwapData);
 					chainSwaps.push(swap as ChainSwapData);
 
-					// Re-subscribe to WebSocket
-					this.websocket.subscribeToSwap(swap.id, (event) => this.handleSwapUpdate(event));
+					// Re-subscribe to WebSocket with skipSave = true to avoid re-saving during recovery
+					this.websocket.subscribeToSwap(swap.id, (event) => this.handleSwapUpdate(event, true));
 				}
 			}
 

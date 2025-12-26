@@ -41,7 +41,8 @@ import type {
 	SubmarineSwapResult,
 	LockupInfo,
 	SubmarineRefundParams,
-	SubmarineRefundResult
+	SubmarineRefundResult,
+	SwapUpdateEvent
 } from './types';
 import type { SwapStorage } from './storage';
 import { ethers } from 'ethers';
@@ -50,6 +51,7 @@ import { BoltzWebSocket } from './WebSocketClient';
 import { EvmContractService } from './EvmContractService';
 import { SubmarineSwapRefundService } from './SubmarineSwapRefundService';
 import { weiToSatoshi } from '../../utils/networkConfig';
+import { EventBus } from '../../core/EventBus';
 import bolt11 from 'bolt11';
 
 export class SubmarineSwapService {
@@ -59,7 +61,9 @@ export class SubmarineSwapService {
 	private refundService: SubmarineSwapRefundService;
 	private activeSwaps: Map<string, SubmarineSwapData> = new Map();
 	private storage?: SwapStorage;
-
+	
+	public events = new EventBus();
+	
 	constructor(websocket: BoltzWebSocket, boltzClient: BoltzClient, evmContractService: EvmContractService, storage?: SwapStorage) {
 		this.boltzClient = boltzClient;
 		this.storage = storage;
@@ -319,10 +323,16 @@ export class SubmarineSwapService {
 
 	/**
 	 * Handle swap status updates from WebSocket
+	 * @param event - Swap event from WebSocket
+	 * @param skipSave - If true, skip saving to storage (used during recovery)
 	 */
-	private async handleSwapUpdate(event: SwapEvent): Promise<void> {
+	private async handleSwapUpdate(event: SwapEvent, skipSave = false): Promise<void> {
 		const swapData = this.activeSwaps.get(event.swapId);
 		if (!swapData) return;
+
+		// Track changes for conditional saving
+		const previousStatus = swapData.status;
+		const hadLockupTx = !!swapData.lockupTxHash;
 
 		// Update swap data
 		swapData.status = event.status as SubmarineSwapStatus;
@@ -360,10 +370,25 @@ export class SubmarineSwapService {
 				break;
 		}
 
-		// Update storage
-		if (this.storage) {
+		// Determine if we should save to storage
+		const hasChanges = 
+			previousStatus !== swapData.status || 
+			(!hadLockupTx && swapData.lockupTxHash);
+
+		// Save to storage only if there are changes and not skipped
+		if (this.storage && !skipSave && hasChanges) {
 			await this.storage.save(swapData.id, swapData);
 		}
+
+		// Emit event to clients
+		this.events.emit('swap.update', {
+			swapId: event.swapId,
+			status: event.status,
+			timestamp: new Date(),
+			swapData: swapData,
+			transaction: event.transaction,
+			failureReason: event.failureReason
+		} as SwapUpdateEvent);
 	}
 
 	/**
@@ -415,8 +440,8 @@ export class SubmarineSwapService {
 					this.activeSwaps.set(swap.id, swap as SubmarineSwapData);
 					submarineSwaps.push(swap as SubmarineSwapData);
 
-					// Re-subscribe to WebSocket
-					this.websocket.subscribeToSwap(swap.id, (event) => this.handleSwapUpdate(event));
+					// Re-subscribe to WebSocket with skipSave = true to avoid re-saving during recovery
+					this.websocket.subscribeToSwap(swap.id, (event) => this.handleSwapUpdate(event, true));
 				}
 			}
 

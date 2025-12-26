@@ -5,6 +5,72 @@ All notable changes to @bittasker/wallet-core will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.6] - 2025-12-26
+
+### Added
+- **Event System Refactor**: Replaced `EventEmitter` with `EventBus` for improved pub/sub pattern
+  - New `EventBus` class with `on()`, `off()`, `emit()`, `clear()`, and `listenerCount()` methods
+  - Better error handling - errors in one listener don't break others
+  - Type-safe event handling with generic support
+  - Comprehensive test coverage (281 unit tests)
+- **Swap Update Events**: All swap services now emit `swap.update` events for real-time monitoring
+  - `SwapUpdateEvent` interface includes full swap data, status, timestamp, and transaction details
+  - `WalletManager.onSwapUpdate()` convenience method to subscribe to all swap services at once
+  - Clients can now monitor swap progress without polling
+- **Conditional Storage Saves**: Swap services now only save to storage when actual changes occur
+  - Prevents redundant storage writes during WebSocket recovery
+  - `skipSave` parameter in `handleSwapUpdate()` for recovery scenarios
+  - Tracks previous state to detect meaningful changes
+
+### Changed
+- **EventEmitter → EventBus Migration**: 
+  - Removed state management from event system (was not being used)
+  - Simplified to pure pub/sub pattern more suitable for SDK events
+  - Updated all swap services to use `EventBus` instead of internal event handling
+- **Liquid URI Format**: Removed `liquidnetwork:` prefix from generated payment URIs
+  - Old format: `liquidnetwork:ADDRESS?amount=...`
+  - New format: `ADDRESS?amount=...` (BIP21-compatible)
+- **Swap Status Consistency**: Standardized claim status to `transaction.claimed` across all services
+- **Event Cleanup**: `WalletManager.dispose()` now properly cleans up all event listeners
+
+### Fixed
+- **Memory Leaks**: Event listeners are now properly cleaned up on disposal
+- **Redundant Storage Writes**: Eliminated unnecessary saves during swap recovery
+- **Test Accuracy**: Fixed test expectations to match actual swap status values
+
+### Technical
+- Exported `EventCallback` type for type-safe event handling
+- Exported `SwapUpdateEvent` type for client implementations
+- Updated TEST_PLAN.md to reflect EventBus changes
+- All 465+ tests passing with new event system
+
+### Benefits
+- **Real-time Updates**: Clients can now react to swap changes immediately via events
+- **Better Performance**: Reduced storage I/O with conditional saves
+- **Cleaner Architecture**: Separation of concerns between events and state management
+- **Developer Experience**: Simple event subscription with automatic cleanup
+
+### Migration Guide
+```typescript
+// Before (v0.1.5) - EventEmitter with state
+import { EventEmitter } from '@bittasker/wallet-core';
+const emitter = new EventEmitter({ count: 0 });
+const unsubscribe = emitter.subscribe((state) => console.log(state));
+
+// After (v0.1.6) - EventBus for pub/sub
+import { EventBus } from '@bittasker/wallet-core';
+const bus = new EventBus();
+const unsubscribe = bus.on('event', (data) => console.log(data));
+
+// Subscribe to swap updates
+const unsubscribe = walletManager.onSwapUpdate((event) => {
+  console.log('Swap updated:', event.swapId, event.status);
+  // event includes full swapData, no need to fetch separately
+});
+```
+
+[0.1.6]: https://gitlab.com/bittasker/wallet-core/-/tags/v0.1.6
+
 ## [0.1.5] - 2025-12-19
 
 ### Added
