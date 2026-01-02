@@ -180,7 +180,7 @@ export class ChainSwapRefundService {
 
         // Update swap data
         swapData.refundTxHash = txHash;
-        swapData.status = 'swap.refunded';
+        swapData.status = 'transaction.refunded';
         swapData.updatedAt = Date.now();
 
         return {

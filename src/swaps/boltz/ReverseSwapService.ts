@@ -209,7 +209,8 @@ export class ReverseSwapService {
 			createdAt: Date.now(),
 			updatedAt: Date.now(),
 			expiresAt: Date.now() + 24 * 60 * 60 * 1000, // 24 hours
-			rifRelayUsed: useSmartWallet // If Smart Wallet used, RIF Relay will be used
+			rifRelayUsed: useSmartWallet, // If Smart Wallet used, RIF Relay will be used
+			description: params.description
 		};
 
 		// Store in memory

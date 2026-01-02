@@ -5,6 +5,78 @@ All notable changes to @bittasker/wallet-core will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.7] - 2026-01-03
+
+### Added
+- **Swap Descriptions**: Added optional `description` field to all swap types
+  - `BoltzSwapData`, `ChainSwapData`, and `SubmarineSwapData` now support user descriptions
+  - Description parameter added to all swap creation methods
+  - Descriptions are stored locally and NOT sent to Boltz API
+  - Useful for internal tracking and UI display (e.g., "Payment for coffee", "Exchange for trading")
+- **Chain Swap Renegotiation**: Implemented Boltz's chain swap renegotiation feature
+  - New `ChainSwapService.canRenegotiate()` method to check eligibility
+  - New `ChainSwapService.getRenegotiationQuote()` method to get adjusted amount quote
+  - New `ChainSwapService.acceptRenegotiation()` method to accept new quote
+  - Allows recovery from failed swaps due to overpayment/underpayment
+  - Avoids refund process when user sends wrong amount
+  - Only available when status is `transaction.lockupFailed` with at least 60 minutes until expiry
+  - Renegotiation API calls implemented directly in ChainSwapService (no BoltzClient dependency)
+
+### Changed
+- **Type Definitions**: Updated swap data interfaces to include optional description field
+- **ChainSwapStatus**: Added missing `transaction.lockupFailed` status per Boltz API specification
+  - Also corrected other status names to match Boltz documentation exactly
+  - `swap.refunded` → `transaction.refunded` (Boltz refunds its own locked funds)
+  - Removed incorrect `swap.refunded` (users refund via refund service, not tracked by Boltz)
+- **Service Initialization**: All swap services now accept and persist description parameter
+- **Swap Creation**: Description is automatically saved to storage when provided
+- **Renegotiation Implementation**: Direct API calls in ChainSwapService instead of going through BoltzClient
+
+### Benefits
+- **Better UX**: Users can add description to swaps for easier tracking
+- **Faster Recovery**: Renegotiation avoids refund process for amount mismatches
+- **Cost Savings**: No additional network fees when renegotiating
+- **Time Savings**: Swap continues immediately after renegotiation acceptance
+- **Flexibility**: Users can choose between renegotiation or refund
+- **Type Safety**: Improved TypeScript compliance with accurate status types
+
+### Technical
+- Description field is metadata only - not sent to Boltz API
+- Renegotiation follows official Boltz API v2 specification exactly
+- Automatic swap data updates after renegotiation acceptance
+- Storage persistence for renegotiated swaps
+- ChainSwapStatus now includes all states per [Boltz documentation](https://api.docs.boltz.exchange/lifecycle.html#chain-swaps)
+
+### Migration Guide
+```typescript
+// Before (v0.1.6)
+const swap = await chainSwapService.createChainSwap({
+  amountSats: 100000,
+  rbtcAddress: userAddress,
+  walletSigner: wallet
+});
+
+// After (v0.1.7) - with optional description
+const swap = await chainSwapService.createChainSwap({
+  amountSats: 100000,
+  rbtcAddress: userAddress,
+  walletSigner: wallet,
+  description: 'Payment for freelance work' // NEW: optional field
+});
+
+// Renegotiation example (NEW in v0.1.7)
+if (chainSwapService.canRenegotiate(failedSwap)) {
+  const quote = await chainSwapService.getRenegotiationQuote(failedSwap.id);
+  console.log(`New amount: ${quote.amount} sats`);
+  
+  // User confirms
+  await chainSwapService.acceptRenegotiation(failedSwap.id, quote.amount);
+  // Swap continues with adjusted amount
+}
+```
+
+[0.1.7]: https://gitlab.com/bittasker/wallet-core/-/tags/v0.1.7
+
 ## [0.1.6] - 2025-12-26
 
 ### Added

@@ -182,7 +182,8 @@ export class SubmarineSwapService {
 				preimageHash,
 				swapTree: swapResponse.swapTree, // For BTC/L-BTC
 				blindingKey: swapResponse.blindingKey, // For L-BTC
-				bip21: swapResponse.bip21 // For BTC/L-BTC
+				bip21: swapResponse.bip21, // For BTC/L-BTC
+				description: params.description
 			};
 
 			// Store in memory

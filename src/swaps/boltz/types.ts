@@ -136,6 +136,7 @@ export interface SubmarineSwapData {
 	blindingKey?: string; // For L-BTC
 	bip21?: string; // Payment URI for UTXO chains
 	rifRelayUsed?: boolean; // Track if RIF Relay was used for gasless refunds (RBTC only)
+	description?: string; // Optional user note/description (NOT sent to Boltz API)
 }
 
 /**
@@ -158,6 +159,9 @@ export interface CreateSubmarineSwapParams {
 	// Optional signer for gas estimation (RBTC only)
 	// If provided, the service will estimate gas costs and include in result
 	signer?: any; // ethers.Signer
+
+	// Optional user note/description (stored locally, NOT sent to Boltz API)
+	description?: string;
 }
 
 /**
@@ -307,18 +311,22 @@ export interface CreateChainSwapResponse {
 /**
  * Chain swap status type
  * Distinct from reverse swaps - includes transaction.server.* events
+ * 
+ * Based on official Boltz API documentation:
+ * https://api.docs.boltz.exchange/lifecycle.html#chain-swaps
  */
 export type ChainSwapStatus = 
 	| 'swap.created'                  // Swap created, waiting for user's L-BTC
 	| 'transaction.mempool'           // User's L-BTC tx in mempool
 	| 'transaction.confirmed'         // User's L-BTC confirmed
+	| 'transaction.lockupFailed'      // User's lockup failed (wrong amount, etc.) - eligible for renegotiation
 	| 'transaction.server.mempool'    // Boltz's RBTC tx in mempool
 	| 'transaction.server.confirmed'  // Boltz's RBTC confirmed, ready to claim!
 	| 'transaction.claim.pending'     // Claim transaction submitted, waiting for confirmation
-	| 'transaction.claimed'           // User claimed RBTC successfully
-	| 'swap.expired'                  // Timeout reached
-	| 'swap.refunded'                 // L-BTC refunded back to user
-	| 'transaction.failed';           // Swap failed
+	| 'transaction.claimed'           // User claimed RBTC successfully (server claimed user's L-BTC)
+	| 'transaction.failed'            // Swap failed (Boltz unable to lock funds)
+	| 'transaction.refunded'          // Boltz refunded its own locked funds (user didn't claim)
+	| 'swap.expired';                 // Timeout reached without user sending L-BTC
 
 // ============================================================================
 // Claim & Refund Types
@@ -433,6 +441,7 @@ export interface BoltzSwapData {
 	updatedAt: number;
 	expiresAt?: number;
 	rifRelayUsed?: boolean; // Track if RIF Relay was used for gasless claiming
+	description?: string; // Optional user note/description (NOT sent to Boltz API)
 }
 
 export interface ChainSwapData {
@@ -473,6 +482,7 @@ export interface ChainSwapData {
 	updatedAt: number;
 	expiresAt: number;
 	rifRelayUsed?: boolean; // Track if RIF Relay was used for gasless claiming
+	description?: string; // Optional user note/description (NOT sent to Boltz API)
 }
 
 // ============================================================================

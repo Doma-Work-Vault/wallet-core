@@ -151,6 +151,7 @@ export class ChainSwapService {
 		amountSats: number;
 		rbtcAddress: string;
 		walletSigner?: ethers.Signer; // Optional: wallet signer to check balance and compute Smart Wallet
+		description?: string;
 	}): Promise<{ swapId: string; liquidUri: string; swapData: ChainSwapData }> {
 		// Validate RBTC address
 		if (!params.rbtcAddress || !ethers.isAddress(params.rbtcAddress)) {
@@ -262,7 +263,8 @@ export class ChainSwapService {
 			createdAt: Date.now(),
 			updatedAt: Date.now(),
 			expiresAt,
-			rifRelayUsed: useSmartWallet
+			rifRelayUsed: useSmartWallet,
+			description: params.description
 		};
 
 		// Store in active swaps
@@ -721,5 +723,163 @@ export class ChainSwapService {
 		this.activeSwaps.set(result.swapData.id, result.swapData);
 
 		return result;
+	}
+
+	/**
+	 * Check if a chain swap can be renegotiated
+	 * 
+	 * According to Boltz API documentation, a swap can be renegotiated if ALL of:
+	 * - Status is transaction.lockupFailed
+	 * - Failure was due to overpayment or underpayment
+	 * - No refund signature has been created yet
+	 * - Actual amount is within pair limits (checked by Boltz API)
+	 * - At least 60 minutes remaining until expiry
+	 * 
+	 * Source: https://api.docs.boltz.exchange/lifecycle.html#chain-swaps
+	 * 
+	 * @param swapData - Chain swap data
+	 * @returns True if swap can be renegotiated
+	 */
+	canRenegotiate(swapData: ChainSwapData): boolean {
+		// Check if status is lockupFailed
+		if (swapData.status !== 'transaction.lockupFailed') {
+			return false;
+		}
+
+		// Check if swap has expired (need at least 60 minutes)
+		const now = Date.now();
+		const timeRemaining = swapData.expiresAt - now;
+		const sixtyMinutes = 60 * 60 * 1000;
+		
+		if (timeRemaining < sixtyMinutes) {
+			return false;
+		}
+
+		// Check if refund transaction has been created
+		if (swapData.refundTxHash) {
+			return false;
+		}
+
+		return true;
+	}
+
+	/**
+	 * Get renegotiation quote for a failed chain swap
+	 * 
+	 * Calls Boltz API: GET /v2/swap/chain/{id}/quote
+	 * Returns a new quote based on the actual amount the user locked.
+	 * 
+	 * The quote is only valid if the swap is eligible for renegotiation.
+	 * Boltz validates:
+	 * - Failure reason is overpayment/underpayment
+	 * - Actual amount is within pair limits
+	 * - Sufficient liquidity available
+	 * 
+	 * Source: https://api.docs.boltz.exchange/lifecycle.html#chain-swaps
+	 * 
+	 * @param swapId - Chain swap ID
+	 * @returns New quote with adjusted amount in satoshis
+	 * @throws Error if swap cannot be renegotiated or API call fails
+	 */
+	async getRenegotiationQuote(swapId: string): Promise<{ amount: number }> {
+		const swapData = this.activeSwaps.get(swapId);
+		if (!swapData) {
+			throw new Error(`Swap ${swapId} not found`);
+		}
+
+		if (!this.canRenegotiate(swapData)) {
+			throw new Error('Swap is not eligible for renegotiation');
+		}
+
+		const apiUrl = this.boltzClient['config'].boltzApiUrl;
+
+		try {
+			const response = await fetch(`${apiUrl}/v2/swap/chain/${swapId}/quote`, {
+				method: 'GET',
+				headers: {
+					'Content-Type': 'application/json'
+				}
+			});
+
+			if (!response.ok) {
+				const errorText = await response.text();
+				throw new Error(`Boltz API error: ${response.status} ${errorText}`);
+			}
+
+			const data = await response.json();
+
+			if (typeof data.amount !== 'number' || data.amount <= 0) {
+				throw new Error('Invalid renegotiation quote response');
+			}
+
+			return { amount: data.amount };
+		} catch (error) {
+			console.error('Failed to get renegotiation quote:', error);
+			throw error;
+		}
+	}
+
+	/**
+	 * Accept renegotiation quote for a failed chain swap
+	 * 
+	 * Calls Boltz API: POST /v2/swap/chain/{id}/quote
+	 * Accepts the new quote and allows the swap to continue with adjusted amount.
+	 * 
+	 * After accepting:
+	 * - Boltz validates the quote hasn't changed
+	 * - Boltz validates sufficient liquidity
+	 * - Boltz locks the adjusted amount on destination chain
+	 * - Swap continues normally (transaction.server.mempool → transaction.server.confirmed)
+	 * 
+	 * Source: https://api.docs.boltz.exchange/lifecycle.html#chain-swaps
+	 * 
+	 * @param swapId - Chain swap ID
+	 * @param amount - The quoted amount to accept (from getRenegotiationQuote)
+	 * @throws Error if swap cannot be renegotiated, amount is invalid, or API call fails
+	 */
+	async acceptRenegotiation(swapId: string, amount: number): Promise<void> {
+		const swapData = this.activeSwaps.get(swapId);
+		if (!swapData) {
+			throw new Error(`Swap ${swapId} not found`);
+		}
+
+		if (!this.canRenegotiate(swapData)) {
+			throw new Error('Swap is not eligible for renegotiation');
+		}
+
+		if (typeof amount !== 'number' || amount <= 0) {
+			throw new Error('Valid amount is required');
+		}
+
+		const apiUrl = this.boltzClient['config'].boltzApiUrl;
+
+		try {
+			const response = await fetch(`${apiUrl}/v2/swap/chain/${swapId}/quote`, {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json'
+				},
+				body: JSON.stringify({ amount })
+			});
+
+			if (!response.ok) {
+				const errorText = await response.text();
+				throw new Error(`Boltz API error: ${response.status} ${errorText}`);
+			}
+
+			// Update local swap data with new expected amount
+			swapData.toAmount = amount;
+			swapData.updatedAt = Date.now();
+
+			// Save to storage
+			if (this.storage) {
+				await this.storage.save(swapId, swapData);
+			}
+
+			console.log(`✅ Renegotiation accepted for swap ${swapId}. New amount: ${amount} sats`);
+		} catch (error) {
+			console.error('Failed to accept renegotiation:', error);
+			throw error;
+		}
 	}
 }
