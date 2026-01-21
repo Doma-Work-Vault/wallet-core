@@ -5,6 +5,86 @@ All notable changes to @bittasker/wallet-core will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.8] - 2026-01-21
+
+### Added
+- **EIP-1191 Address Support**: Full cryptographic checksum validation for RSK addresses
+  - New `rskAddress.ts` utility module with EIP-1191 implementation
+  - `toEip1191ChecksumAddress()`: Generate EIP-1191 checksummed addresses with chain ID
+  - `isValidRskAddress()`: Validate addresses with proper EIP-1191 checksum verification
+  - `normalizeRskAddress()`: Convert addresses to lowercase for ethers.js compatibility
+  - `areSameRskAddress()`: Case-insensitive address comparison utility
+  - Keccak256-based checksum algorithm per [EIP-1191 specification](https://eips.ethereum.org/EIPS/eip-1191)
+  - Support for RSK Mainnet (chainId 30), Testnet (chainId 31), and Regtest (chainId 33)
+
+### Changed
+- **RSKWallet Address Format**: `getAddress()` now returns EIP-1191 checksummed addresses
+  - Addresses include chain ID in checksum calculation for better safety
+  - Prevents accidental cross-chain address usage
+  - Backward compatible: accepts lowercase, uppercase, and mixed-case addresses
+- **Address Validation**: Enhanced validation in RSKWallet and swap services
+  - `send()` and `estimateGas()` now validate EIP-1191 checksums
+  - Addresses normalized to lowercase before passing to ethers.js (avoids EIP-55 rejection)
+  - Swap services use case-insensitive address comparison
+- **Test Coverage**: Added comprehensive tests for EIP-1191 validation
+  - Tests for mainnet checksummed addresses on testnet (cross-chain compatibility)
+  - Tests for lowercase address acceptance
+  - All 44 RSKWallet tests passing
+
+### Fixed
+- **ethers.js Compatibility**: Resolved checksum validation conflicts
+  - ethers.js only supports EIP-55 (Ethereum) checksums
+  - RSK uses EIP-1191 (includes chain ID in checksum)
+  - Solution: Validate EIP-1191 ourselves, normalize to lowercase for ethers
+- **Address Comparison**: Fixed false "different address" detection in swap services
+  - `ReverseSwapService` and `ChainSwapService` now use case-insensitive comparison
+  - Prevents issues when comparing EIP-1191 vs lowercase addresses
+
+### Technical
+- EIP-1191 checksum algorithm: `keccak256(chainId + "0x" + address.toLowerCase())`
+- Hash nibble >= 8 → uppercase character, < 8 → lowercase character
+- Accepts all-lowercase or all-uppercase addresses (no checksum validation)
+- Mixed-case addresses must match EIP-1191 checksum for the active chain
+- Full cryptographic validation, not just regex format checking
+
+### Benefits
+- **Chain Safety**: Addresses checksummed for RSK are distinguishable from Ethereum
+- **Error Prevention**: Wallets can warn users about wrong-chain addresses
+- **Standard Compliance**: Follows official EIP-1191 specification for RSK networks
+- **Backward Compatible**: Existing lowercase addresses continue to work
+- **Better UX**: Users see properly checksummed addresses in their wallet
+
+### Migration Guide
+```typescript
+// Before (v0.1.8) - EIP-55 checksum (Ethereum-style)
+const address = rskWallet.getAddress();
+// Returns: "0xA2CC70eE855b5F577eECA688539D8A022550de45" (EIP-55)
+
+// After (v0.1.9) - EIP-1191 checksum (RSK-style with chain ID)
+const address = rskWallet.getAddress();
+// Returns: "0xa2CC70eE855b5f577eeCA688539D8a022550de45" (EIP-1191 for chainId 30)
+
+// Address validation now supports EIP-1191
+import { isValidRskAddress, toEip1191ChecksumAddress } from '@bittasker/wallet-core';
+
+// Validate RSK address
+const isValid = isValidRskAddress('0xE1D3F94d0b1aBEbdbE5e722e68CdEcA94a8e7d41', 30);
+
+// Generate EIP-1191 checksum
+const checksummed = toEip1191ChecksumAddress('0xe1d3f94d0b1abebdbe5e722e68cdeca94a8e7d41', 30);
+// Returns: "0xE1D3F94d0b1aBEbdbE5e722e68CdEcA94a8e7d41"
+
+// All address formats still work
+await rskWallet.send('0xe1d3f94d0b1abebdbe5e722e68cdeca94a8e7d41', '0.1'); // lowercase ✅
+await rskWallet.send('0xE1D3F94d0b1aBEbdbE5e722e68CdEcA94a8e7d41', '0.1'); // EIP-1191 ✅
+```
+
+### References
+- [EIP-1191: Add chain id to mixed-case checksum address encoding](https://eips.ethereum.org/EIPS/eip-1191)
+- [RSK Network Documentation](https://dev.rootstock.io/)
+
+[0.1.9]: https://gitlab.com/bittasker/wallet-core/-/tags/v0.1.9
+
 ## [0.1.7] - 2026-01-03
 
 ### Added

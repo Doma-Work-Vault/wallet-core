@@ -48,6 +48,14 @@ export {
 
 export type { RSKNetwork, FeeTier } from './utils/networkConfig';
 
+// RSK address utilities (EIP-1191)
+export {
+    toEip1191ChecksumAddress,
+    isValidRskAddress,
+    normalizeRskAddress,
+    areSameRskAddress
+} from './utils/rskAddress';
+
 // Wallet Manager - Main orchestration class
 export { WalletManager } from './core/WalletManager';
 export type { WalletManagerConfig, WalletBalances, SwapLimits } from './core/WalletManager';

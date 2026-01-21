@@ -43,9 +43,10 @@ import { crypto } from 'bitcoinjs-lib';
 import { BoltzClient } from './BoltzClient';
 import { BoltzWebSocket } from './WebSocketClient';
 import { getSmartWalletAddress } from '../rif/Signer';
+import { getRSKConfig, isRifRelayAvailable, weiToSatoshi } from '../../utils/networkConfig';
+import { areSameRskAddress, isValidRskAddress, normalizeRskAddress } from '../../utils/rskAddress';
 import { EvmContractService } from './EvmContractService';
 import { RifRelayClaimService } from './RifRelayClaimService';
-import { isRifRelayAvailable, weiToSatoshi } from '../../utils/networkConfig';
 import { EventBus } from '../../core/EventBus';
 
 
@@ -121,9 +122,11 @@ export class ReverseSwapService {
 		walletSigner?: ethers.Signer; // Optional: wallet signer to check balance and compute Smart Wallet
 	}): Promise<{ swapId: string; invoice: string; swapData: BoltzSwapData }> {
 		// Validate RBTC address
-		if (!params.rbtcAddress || !ethers.isAddress(params.rbtcAddress)) {
+		const chainId = getRSKConfig().chainId;
+		if (!params.rbtcAddress || !isValidRskAddress(params.rbtcAddress, chainId)) {
 			throw new Error('Invalid RBTC address format');
 		}
+		const normalizedRbtcAddress = normalizeRskAddress(params.rbtcAddress);
 
 		// Validate amount
 		if (!params.amountSats || params.amountSats <= 0) {
@@ -158,7 +161,7 @@ export class ReverseSwapService {
 		if (isRifRelayAvailable() && params.walletSigner) {
 			try {
 				// Check user's gas balance
-				const balance = await params.walletSigner.provider?.getBalance(params.rbtcAddress);
+				const balance = await params.walletSigner.provider?.getBalance(normalizedRbtcAddress);
 				const gasEstimate = 100000n * 60000000n; // ~100k gas @ 0.06 gwei
 
 				if (!balance || balance < gasEstimate) {
@@ -295,7 +298,7 @@ export class ReverseSwapService {
 
 				try {
 					const wasCreatedForSmartWallet = swapData.claimAddress &&
-						swapData.claimAddress !== swapData.rbtcAddress;
+						!areSameRskAddress(swapData.claimAddress, swapData.rbtcAddress);
 
 					if (wasCreatedForSmartWallet) {
 						// Swap was created with Smart Wallet address - MUST use RIF Relay

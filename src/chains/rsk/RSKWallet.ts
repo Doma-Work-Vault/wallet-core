@@ -3,9 +3,10 @@
  * Handles RSK (Rootstock) wallet operations including initialization, balance, and transactions
  */
 
-import type { NetworkType } from '../../core/types';
+import type { GasEstimation, NetworkType } from '../../core/types';
 import { ethers } from 'ethers';
 import { RSK_NETWORKS } from '../../utils/networkConfig';
+import { isValidRskAddress, normalizeRskAddress, toEip1191ChecksumAddress } from '../../utils/rskAddress';
 import { loadRSKTransactions } from './RSKTransactions';
 
 export interface RSKWalletConfig {
@@ -65,7 +66,8 @@ export class RSKWallet {
         if (!this.wallet) {
             throw new Error('Wallet not initialized');
         }
-        return this.wallet.address;
+        const chainId = RSK_NETWORKS[this.config.network].chainId;
+        return toEip1191ChecksumAddress(this.wallet.address, chainId);
     }
 
     /**
@@ -101,10 +103,13 @@ export class RSKWallet {
         }
 
         try {
-            // Validate address
-            if (!ethers.isAddress(to)) {
+            const chainId = RSK_NETWORKS[this.config.network].chainId;
+
+            // Validate address (EIP-1191 for RSK)
+            if (!isValidRskAddress(to, chainId)) {
                 throw new Error('Invalid recipient address');
             }
+            const normalizedTo = normalizeRskAddress(to);
 
             // Parse amount
             const amountWei = ethers.parseEther(amount);
@@ -115,7 +120,7 @@ export class RSKWallet {
             // Estimate gas
             const gasEstimate = await this.provider.estimateGas({
                 from: this.wallet.address,
-                to,
+                to: normalizedTo,
                 value: amountWei
             });
 
@@ -130,7 +135,7 @@ export class RSKWallet {
 
             // Send transaction
             const tx = await this.wallet.sendTransaction({
-                to,
+                to: normalizedTo,
                 value: amountWei,
                 gasLimit: gasEstimate,
                 gasPrice
@@ -148,33 +153,36 @@ export class RSKWallet {
     /**
      * Estimate gas for transaction
      */
-    async estimateGas(to: string, amount: string): Promise<{
-        gasLimit: bigint;
-        gasPrice: bigint;
-        totalCost: bigint;
-        totalCostFormatted: string;
-    }> {
+    async estimateGas(to: string, amount: string): Promise<GasEstimation> {
         if (!this.provider || !this.wallet) {
             throw new Error('Wallet not initialized');
         }
 
         try {
+            const chainId = RSK_NETWORKS[this.config.network].chainId;
+            if (!isValidRskAddress(to, chainId)) {
+                throw new Error('Invalid recipient address');
+            }
+            const normalizedTo = normalizeRskAddress(to);
             const amountWei = ethers.parseEther(amount);
 
             const gasLimit = await this.provider.estimateGas({
                 from: this.wallet.address,
-                to,
+                to: normalizedTo,
                 value: amountWei
             });
 
+            // Get gas price
             const feeData = await this.provider.getFeeData();
             const gasPrice = feeData.gasPrice || ethers.parseUnits('1', 'gwei');
+            
+            // Calculate total cost
             const totalCost = gasLimit * gasPrice;
 
             return {
-                gasLimit,
-                gasPrice,
-                totalCost,
+                gasLimit: gasLimit.toString(),
+                gasPrice: gasPrice.toString(),
+                totalCost: totalCost.toString(),
                 totalCostFormatted: ethers.formatEther(totalCost)
             };
         } catch (error) {

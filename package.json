@@ -1,6 +1,6 @@
 {
   "name": "@bittasker/wallet-core",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "description": "Multi-chain Bitcoin wallet SDK for RSK, BSC, Lightning swaps, Liquid swaps, and Submarine swaps",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

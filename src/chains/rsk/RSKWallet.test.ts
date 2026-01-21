@@ -341,7 +341,7 @@ describe('RSKWallet', () => {
       const estimate = await wallet.estimateGas(recipientAddress, amount);
 
       // Total cost should be gasLimit * gasPrice
-      const expectedTotalCost = estimate.gasLimit * estimate.gasPrice;
+      const expectedTotalCost = BigInt(estimate.gasLimit) * BigInt(estimate.gasPrice);
       expect(estimate.totalCost).toBe(expectedTotalCost);
     });
 
@@ -355,6 +355,29 @@ describe('RSKWallet', () => {
       expect(typeof estimate.totalCostFormatted).toBe('string');
       // Should be a valid decimal number
       expect(parseFloat(estimate.totalCostFormatted)).toBeGreaterThanOrEqual(0);
+    });
+
+    it('should accept EIP-1191 checksummed mainnet address', async () => {
+      const wallet = new RSKWallet({ network: 'mainnet' });
+      await wallet.initialize(testMnemonic);
+
+      // Real mainnet address with EIP-1191 checksum
+      const mainnetAddress = '0xE1D3F94d0b1aBEbdbE5e722e68CdEcA94a8e7d41';
+      const estimate = await wallet.estimateGas(mainnetAddress, amount);
+
+      expect(estimate).toHaveProperty('gasLimit');
+      expect(typeof estimate.gasLimit).toBe('bigint');
+    });
+
+    it('should accept lowercase address', async () => {
+      const wallet = new RSKWallet({ network: 'mainnet' });
+      await wallet.initialize(testMnemonic);
+
+      const lowercaseAddress = '0xe1d3f94d0b1abebdbe5e722e68cdeca94a8e7d41';
+      const estimate = await wallet.estimateGas(lowercaseAddress, amount);
+
+      expect(estimate).toHaveProperty('gasLimit');
+      expect(typeof estimate.gasLimit).toBe('bigint');
     });
 
     it('should throw if not initialized', async () => {

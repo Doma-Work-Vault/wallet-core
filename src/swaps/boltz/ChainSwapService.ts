@@ -49,7 +49,8 @@ import { getSmartWalletAddress } from '../rif/Signer';
 import { EvmContractService } from './EvmContractService';
 import { RifRelayClaimService } from './RifRelayClaimService';
 import { ChainSwapRefundService } from './ChainSwapRefundService';
-import { getLiquidAssetId, isRifRelayAvailable, weiToSatoshi } from '../../utils/networkConfig';
+import { getLiquidAssetId, getRSKConfig, isRifRelayAvailable, weiToSatoshi } from '../../utils/networkConfig';
+import { isValidRskAddress, normalizeRskAddress } from '../../utils/rskAddress';
 import { EventBus } from '../../core/EventBus';
 import * as ecc from 'tiny-secp256k1';
 
@@ -154,9 +155,11 @@ export class ChainSwapService {
 		description?: string;
 	}): Promise<{ swapId: string; liquidUri: string; swapData: ChainSwapData }> {
 		// Validate RBTC address
-		if (!params.rbtcAddress || !ethers.isAddress(params.rbtcAddress)) {
+		const chainId = getRSKConfig().chainId;
+		if (!params.rbtcAddress || !isValidRskAddress(params.rbtcAddress, chainId)) {
 			throw new Error('Invalid RBTC address format');
 		}
+		const normalizedRbtcAddress = normalizeRskAddress(params.rbtcAddress);
 
 		// Generate preimage and hash
 		const preimage = randomBytes(32);
@@ -173,7 +176,7 @@ export class ChainSwapService {
 		if (isRifRelayAvailable() && params.walletSigner && params.walletSigner.provider) {
 			try {
 				// Check user's gas balance
-				const balance = await params.walletSigner.provider.getBalance(params.rbtcAddress);
+				const balance = await params.walletSigner.provider.getBalance(normalizedRbtcAddress);
 				const gasEstimate = 100000n * 60000000n; // ~100k gas @ 0.06 gwei
 
 				if (balance < gasEstimate) {
