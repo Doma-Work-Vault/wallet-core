@@ -44,7 +44,7 @@ import { BoltzClient } from './BoltzClient';
 import { BoltzWebSocket } from './WebSocketClient';
 import { getSmartWalletAddress } from '../rif/Signer';
 import { getRSKConfig, isRifRelayAvailable, weiToSatoshi } from '../../utils/networkConfig';
-import { areSameRskAddress, isValidRskAddress, normalizeRskAddress } from '../../utils/rskAddress';
+import { areSameRskAddress, isValidRskAddress, normalizeRskAddress, toEip55ChecksumAddress } from '../../utils/rskAddress';
 import { EvmContractService } from './EvmContractService';
 import { RifRelayClaimService } from './RifRelayClaimService';
 import { EventBus } from '../../core/EventBus';
@@ -61,7 +61,7 @@ export class ReverseSwapService {
 	private walletGetter: (() => any) | null = null;
 	private storage?: SwapStorage;
 	private claimingSwaps: Set<string> = new Set();
-	
+
 	public events = new EventBus();
 
 	constructor(websocket: BoltzWebSocket, boltzClient: BoltzClient, evmContractService: EvmContractService, storage?: SwapStorage) {
@@ -175,6 +175,10 @@ export class ReverseSwapService {
 			}
 		}
 
+		// Convert claimAddress to EIP-55 format for Boltz API compatibility
+		// Boltz expects standard Ethereum checksum (EIP-55), not RSK chain-aware (EIP-1191)
+		const claimAddressEip55 = toEip55ChecksumAddress(claimAddress.toLowerCase());
+
 		const response = await fetch(`${apiUrl}/v2/swap/reverse`, {
 			method: 'POST',
 			headers: {
@@ -185,7 +189,7 @@ export class ReverseSwapService {
 				to: 'RBTC',
 				invoiceAmount: params.amountSats,
 				preimageHash,
-				claimAddress: claimAddress // Use computed claim address
+				claimAddress: claimAddressEip55 // Use EIP-55 format for API compatibility
 			})
 		});
 
@@ -366,8 +370,8 @@ export class ReverseSwapService {
 		}
 
 		// Determine if we should save to storage
-		const hasChanges = 
-			previousStatus !== swapData.status || 
+		const hasChanges =
+			previousStatus !== swapData.status ||
 			(!hadLockupTx && swapData.lockupTxHash);
 
 		// Save to storage only if there are changes and not skipped
@@ -403,6 +407,7 @@ export class ReverseSwapService {
 		walletSigner: ethers.Signer
 	): Promise<{ txHash: string }> {
 		try {
+			console.log(swapData)
 			// Validate required data
 			if (
 				!swapData.preimage ||
@@ -415,6 +420,7 @@ export class ReverseSwapService {
 
 			// Get EtherSwap contract address
 			const etherSwapAddress = await this.evmContractService.getEtherSwapAddress();
+			console.log({ etherSwapAddress })
 
 			// Get actual lockup parameters from event
 			let amount: number;
@@ -428,6 +434,7 @@ export class ReverseSwapService {
 					walletSigner.provider,
 					etherSwapAddress
 				);
+				console.log({ eventParams })
 
 				if (eventParams) {
 					amount = weiToSatoshi(eventParams.amount);
@@ -442,6 +449,8 @@ export class ReverseSwapService {
 				amount = swapData.onchainAmount;
 				refundAddress = swapData.refundAddress;
 				timelock = swapData.timeoutBlockHeight;
+
+				console.log({ amount, refundAddress, timelock })
 			}
 
 			// Use RifRelayClaimService for gasless claim
@@ -453,6 +462,7 @@ export class ReverseSwapService {
 				refundAddress,
 				timelock
 			});
+			console.log({ txHash })
 
 			// Update swap data
 			swapData.claimTxHash = txHash;

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
-import { BoltzClient, BoltzError, getLockupEventParameters } from './BoltzClient';
+import { BoltzClient, BoltzError, getLockupEventParameters } from '../../swaps/boltz/BoltzClient';
 import { ethers } from 'ethers';
 
 // Mock fetch globally

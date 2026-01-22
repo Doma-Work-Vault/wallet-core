@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { SubmarineSwapRefundService } from './SubmarineSwapRefundService';
-import { BoltzClient } from './BoltzClient';
-import { EvmContractService } from './EvmContractService';
-import type { SubmarineSwapData, SubmarineRefundParams } from './types';
+import { SubmarineSwapRefundService } from '../../swaps/boltz/SubmarineSwapRefundService';
+import { BoltzClient } from '../../swaps/boltz/BoltzClient';
+import { EvmContractService } from '../../swaps/boltz/EvmContractService';
+import type { SubmarineSwapData, SubmarineRefundParams } from '../../swaps/boltz/types';
 
 // Mock dependencies
 vi.mock('./BoltzClient');

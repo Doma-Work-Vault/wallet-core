@@ -1,12 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { ChainSwapService } from './ChainSwapService';
-import { BoltzClient } from './BoltzClient';
-import { BoltzWebSocket } from './WebSocketClient';
-import { EvmContractService } from './EvmContractService';
-import { RifRelayClaimService } from './RifRelayClaimService';
-import { ChainSwapRefundService } from './ChainSwapRefundService';
-import type { SwapStorage, ChainSwapData, SwapEvent } from './types';
-import * as ethers from 'ethers';
+import { ChainSwapService } from '../../swaps/boltz/ChainSwapService';
+import type { SwapStorage } from '../../swaps/boltz/storage';
+import type { ChainSwapData, SwapEvent } from '../../swaps/boltz/types';
 
 // Mock dependencies
 vi.mock('./BoltzClient');
@@ -27,15 +22,17 @@ vi.mock('./ChainSwapRefundService', () => ({
     }),
   })),
 }));
-vi.mock('../rif/Signer', () => ({
+vi.mock('../../swaps/rif/Signer', () => ({
   getSmartWalletAddress: vi.fn().mockResolvedValue({
-    address: '0xSmartWallet123456789012345678901234567890',
+    address: '0xAbCdEf1234567890123456789012345678901234',
   }),
 }));
 vi.mock('../../utils/networkConfig', () => ({
+  getNetwork: vi.fn().mockReturnValue('testnet'),
   isRifRelayAvailable: vi.fn().mockReturnValue(true),
   weiToSatoshi: vi.fn((wei: bigint) => Number(wei) / 1e10),
   getLiquidAssetId: vi.fn(() => '6f0279e9ed041c3d710a9f57d0c02928416460c4b722ae3457a11eec381c526d'),
+  getRSKConfig: vi.fn().mockReturnValue({ chainId: 31 }), // RSK Testnet
 }));
 
 // Mock crypto and bitcoinjs-lib
@@ -170,6 +167,13 @@ describe('ChainSwapService', () => {
       vi.spyOn(mockRifRelayService, 'claimViaRifRelay').mockResolvedValue('0x' + 'r'.repeat(64));
       vi.spyOn(mockRifRelayService, 'waitForConfirmation').mockResolvedValue(undefined);
     }
+    if (mockRefundService) {
+      vi.spyOn(mockRefundService, 'isSwapRefundable').mockResolvedValue({ refundable: true });
+      vi.spyOn(mockRefundService, 'refundChainSwap').mockResolvedValue({
+        swapData: {} as ChainSwapData,
+        txHash: '0x' + 'refund'.repeat(16),
+      });
+    }
   });
 
   describe('Constructor', () => {
@@ -260,7 +264,7 @@ describe('ChainSwapService', () => {
         walletSigner: mockSigner,
       });
 
-      expect(result.swapData.claimAddress).toBe('0xSmartWallet123456789012345678901234567890');
+      expect(result.swapData.claimAddress).toBe('0xAbCdEf1234567890123456789012345678901234');
       expect(result.swapData.rifRelayUsed).toBe(true);
     });
 
@@ -672,6 +676,7 @@ describe('ChainSwapService', () => {
         blindingKey: 'blinding-key-123',
         liquidUri: 'liquidnetwork:...',
         lockupTimeoutBlockHeight: 100,
+        lockupTxHash: '0x' + 'l'.repeat(64), // Add lockup transaction hash
         swapTree: 'swap-tree-123',
         serverPublicKey: 'server-pubkey-123',
         refundPublicKey: 'refund-pubkey-123',
@@ -709,6 +714,7 @@ describe('ChainSwapService', () => {
         blindingKey: 'blinding-key-123',
         liquidUri: 'liquidnetwork:...',
         lockupTimeoutBlockHeight: 100,
+        lockupTxHash: '0x' + 'l'.repeat(64), // Add lockup transaction hash
         swapTree: 'swap-tree-123',
         serverPublicKey: 'server-pubkey-123',
         refundPublicKey: 'refund-pubkey-123',

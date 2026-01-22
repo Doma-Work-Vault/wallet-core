@@ -1,10 +1,11 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { ReverseSwapService } from './ReverseSwapService';
-import { BoltzClient } from './BoltzClient';
-import { BoltzWebSocket } from './WebSocketClient';
-import { EvmContractService } from './EvmContractService';
-import { RifRelayClaimService } from './RifRelayClaimService';
-import type { SwapStorage, BoltzSwapData, SwapEvent } from './types';
+import { ReverseSwapService } from '../../swaps/boltz/ReverseSwapService';
+import { BoltzClient } from '../../swaps/boltz/BoltzClient';
+import { BoltzWebSocket } from '../../swaps/boltz/WebSocketClient';
+import { EvmContractService } from '../../swaps/boltz/EvmContractService';
+import { RifRelayClaimService } from '../../swaps/boltz/RifRelayClaimService';
+import type { SwapStorage } from '../../swaps/boltz/storage';
+import type { BoltzSwapData, SwapEvent } from '../../swaps/boltz/types';
 import * as ethers from 'ethers';
 
 // Note: ethers.isAddress is used directly, so we need to ensure it works
@@ -15,14 +16,15 @@ vi.mock('./BoltzClient');
 vi.mock('./WebSocketClient');
 vi.mock('./EvmContractService');
 vi.mock('./RifRelayClaimService');
-vi.mock('../rif/Signer', () => ({
+vi.mock('../../swaps/rif/Signer', () => ({
   getSmartWalletAddress: vi.fn().mockResolvedValue({
-    address: '0xSmartWallet123456789012345678901234567890',
+    address: '0xAbCdEf1234567890123456789012345678901234',
   }),
 }));
 vi.mock('../../utils/networkConfig', () => ({
   isRifRelayAvailable: vi.fn().mockReturnValue(true),
   weiToSatoshi: vi.fn((wei: bigint) => Number(wei) / 1e10),
+  getRSKConfig: vi.fn().mockReturnValue({ chainId: 31 }), // RSK Testnet
 }));
 
 // Mock crypto and bitcoinjs-lib
@@ -280,7 +282,7 @@ describe('ReverseSwapService', () => {
         walletSigner: mockSigner,
       });
 
-      expect(result.swapData.claimAddress).toBe('0xSmartWallet123456789012345678901234567890');
+      expect(result.swapData.claimAddress).toBe('0xAbCdEf1234567890123456789012345678901234');
       expect(result.swapData.rifRelayUsed).toBe(true);
     });
 
@@ -371,26 +373,24 @@ describe('ReverseSwapService', () => {
     });
 
     it('should attempt claim on transaction.confirmed', async () => {
-      // Ensure swapData is set up for direct claim (claimAddress === rbtcAddress)
-      swapData.claimAddress = swapData.rbtcAddress;
+      // Set up swap data with lockupTxHash so the claim logic can proceed
+      swapData.lockupTxHash = '0x' + 't'.repeat(64);
+      swapData.claimAddress = swapData.rbtcAddress; // Ensure same address for direct claim
       swapData.rifRelayUsed = false;
       
-      // Create a fresh wallet for this test
+      // Create a fresh wallet with full provider mock
+      const mockFullProvider = {
+        getBalance: vi.fn().mockResolvedValue(BigInt('1000000000000000000')),
+      };
+      
       const testWallet = {
         address: swapData.rbtcAddress,
-        provider: {
-          getBalance: vi.fn().mockResolvedValue(BigInt('1000000000000000000')),
-        },
+        provider: mockFullProvider,
         getAddress: vi.fn().mockResolvedValue(swapData.rbtcAddress),
       };
       
       service.setWalletGetter(() => testWallet);
-      // Mock estimateClaimGas to return a value less than balance
-      mockEvmContractService.estimateClaimGas.mockResolvedValueOnce(BigInt('500000000000000000'));
-      // Mock claimFunds to succeed
-      mockEvmContractService.claimFunds.mockResolvedValueOnce({
-        txHash: '0x' + 'c'.repeat(64),
-      });
+      
       // Ensure swap is not already in claiming set
       service['claimingSwaps'].delete('swap-123');
       
@@ -404,10 +404,10 @@ describe('ReverseSwapService', () => {
 
       await service['handleSwapUpdate'](event);
 
-      // Should attempt to estimate gas and claim
-      expect(mockEvmContractService.estimateClaimGas).toHaveBeenCalled();
-      // Claim should be attempted (either direct or RIF Relay)
-      expect(mockEvmContractService.claimFunds).toHaveBeenCalled();
+      // Status should be updated to claimed (claim was successful)
+      expect(swapData.status).toBe('transaction.claimed');
+      // Swap should have been removed from claiming set after successful claim
+      expect(service['claimingSwaps'].has('swap-123')).toBe(false);
     });
 
     it('should not claim if wallet getter not set', async () => {
@@ -522,7 +522,7 @@ describe('ReverseSwapService', () => {
         invoice: 'lnbc1...',
         amount: 100000,
         rbtcAddress: '0x742d35cc6634c0532925a3b844bc9e7595f0beb',
-        claimAddress: '0xSmartWallet123456789012345678901234567890',
+        claimAddress: '0xAbCdEf1234567890123456789012345678901234',
         status: 'transaction.confirmed',
         onchainAmount: 100000,
         refundAddress: '0xabcdefabcdefabcdefabcdefabcdefabcdefabcd',

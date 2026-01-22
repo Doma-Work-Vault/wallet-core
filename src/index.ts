@@ -53,7 +53,8 @@ export {
     toEip1191ChecksumAddress,
     isValidRskAddress,
     normalizeRskAddress,
-    areSameRskAddress
+    areSameRskAddress,
+    toEip55ChecksumAddress
 } from './utils/rskAddress';
 
 // Wallet Manager - Main orchestration class

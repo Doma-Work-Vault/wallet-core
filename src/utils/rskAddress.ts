@@ -62,3 +62,19 @@ export function areSameRskAddress(a?: string, b?: string): boolean {
 	}
 	return normalizeHexAddress(a) === normalizeHexAddress(b);
 }
+
+/**
+ * Convert any Ethereum address (EIP-1191, EIP-55, or lowercase) to EIP-55 format
+ * This is needed for compatibility with APIs/services that don't support EIP-1191
+ * 
+ * @param address - Address in any format (EIP-1191, EIP-55, or lowercase)
+ * @returns Address in EIP-55 format (standard Ethereum checksum)
+ */
+export function toEip55ChecksumAddress(address: string): string {
+	if (!isValidHexAddress(address)) {
+		throw new Error('Invalid address format');
+	}
+	// ethers.getAddress() returns EIP-55 checksummed address (without chain ID)
+	// First lowercase it to ensure we're not passing mixed case that could fail validation
+	return ethers.getAddress(address.toLowerCase());
+}

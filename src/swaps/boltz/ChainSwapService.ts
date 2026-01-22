@@ -50,7 +50,7 @@ import { EvmContractService } from './EvmContractService';
 import { RifRelayClaimService } from './RifRelayClaimService';
 import { ChainSwapRefundService } from './ChainSwapRefundService';
 import { getLiquidAssetId, getRSKConfig, isRifRelayAvailable, weiToSatoshi } from '../../utils/networkConfig';
-import { isValidRskAddress, normalizeRskAddress } from '../../utils/rskAddress';
+import { isValidRskAddress, normalizeRskAddress, toEip55ChecksumAddress } from '../../utils/rskAddress';
 import { EventBus } from '../../core/EventBus';
 import * as ecc from 'tiny-secp256k1';
 
@@ -208,13 +208,17 @@ export class ChainSwapService {
 			throw new Error(`Amount too large. Maximum: ${pairInfo.limits.maximal} sats (${pairInfo.limits.maximal / 100000000} BTC)`);
 		}
 
+		// Convert claimAddress to EIP-55 format for Boltz API compatibility
+		// Boltz expects standard Ethereum checksum (EIP-55), not RSK chain-aware (EIP-1191)
+		const claimAddressEip55 = toEip55ChecksumAddress(claimAddress.toLowerCase());
+
 		// Create chain swap via Boltz API
 		const swapResponse = await this.boltzClient.createChainSwap({
 			from: 'L-BTC',
 			to: 'RBTC',
 			userLockAmount: params.amountSats,
 			preimageHash,
-			claimAddress,
+			claimAddress: claimAddressEip55,
 			refundPublicKey: refundKey.publicKey,
 			pairHash: pairInfo.hash,
 			referralId: ''

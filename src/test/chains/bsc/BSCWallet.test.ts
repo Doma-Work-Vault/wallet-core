@@ -1,13 +1,13 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { BSCWallet, type BSCWalletConfig } from './BSCWallet';
+import { BSCWallet, type BSCWalletConfig } from '../../../chains/bsc/BSCWallet';
 
 // Mock BSCTransactions module
-vi.mock('./BSCTransactions', () => ({
+vi.mock('../../../chains/bsc/BSCTransactions', () => ({
   loadBSCTransactions: vi.fn().mockResolvedValue([]),
 }));
 
 // Mock BSCPaymaster module
-vi.mock('./BSCPaymaster', () => ({
+vi.mock('../../../chains/bsc/BSCPaymaster', () => ({
   BSCPaymasterContract: vi.fn().mockImplementation(() => ({
     canPayFeesInUsdt: vi.fn().mockResolvedValue(false),
   })),
@@ -596,7 +596,7 @@ describe('BSCWallet', () => {
 
   describe('loadTransactions', () => {
     it('should call loadBSCTransactions with correct parameters', async () => {
-      const { loadBSCTransactions } = await import('./BSCTransactions');
+      const { loadBSCTransactions } = await import('../../../chains/bsc/BSCTransactions');
       
       const wallet = new BSCWallet({ network: 'testnet', bscscanApiKey: 'test-key' });
       await wallet.initialize(testMnemonic);
@@ -612,7 +612,7 @@ describe('BSCWallet', () => {
     });
 
     it('should call loadBSCTransactions without API key if not provided', async () => {
-      const { loadBSCTransactions } = await import('./BSCTransactions');
+      const { loadBSCTransactions } = await import('../../../chains/bsc/BSCTransactions');
       
       const wallet = new BSCWallet({ network: 'testnet' });
       await wallet.initialize(testMnemonic);

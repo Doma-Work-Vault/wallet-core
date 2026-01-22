@@ -8,7 +8,7 @@ import type {
   Transaction,
   WalletState,
   BoltzNetworkConfig,
-} from './types';
+} from '../../core/types';
 
 describe('Core Types', () => {
   describe('NetworkType', () => {

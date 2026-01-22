@@ -127,15 +127,37 @@ export class SubmarineSwapService {
 				throw new Error(`Submarine swap pair ${params.from}/${params.to} not available`);
 			}
 
-			// Create swap via Boltz API
-			const swapResponse = await this.boltzClient.createSubmarineSwap({
-				from: params.from,
-				to: params.to,
-				invoice: params.invoice,
-				pairHash: pairInfo.hash,
-				refundPublicKey: params.refundPublicKey,
-				referralId: params.referralId || ''
-			});
+			// Try to create swap via Boltz API
+			let swapResponse;
+			try {
+				swapResponse = await this.boltzClient.createSubmarineSwap({
+					from: params.from,
+					to: params.to,
+					invoice: params.invoice,
+					pairHash: pairInfo.hash,
+					refundPublicKey: params.refundPublicKey,
+					referralId: params.referralId || ''
+				});
+			} catch (error) {
+				// Check if error is due to duplicate invoice
+				if (error instanceof Error && error.message.includes('swap with this invoice exists already')) {					
+					// Try to find and return existing swap
+					const existingSwap = await this.findSwapByInvoice(params.invoice);
+					
+					if (existingSwap) {
+						return await this.prepareExistingSwapResult(existingSwap, params);
+					}
+					
+					// If we couldn't find the swap, re-throw the original error
+					throw new Error(
+						'A swap with this invoice already exists on Boltz, but could not be found. ' +
+						'Please use a new Lightning invoice or wait for the existing swap to complete/expire.'
+					);
+				}
+				
+				// Re-throw other errors
+				throw error;
+			}
 
 			// Decode the invoice to extract amount and payment hash
 			const decodedInvoice = bolt11.decode(params.invoice);
@@ -512,6 +534,123 @@ export class SubmarineSwapService {
 			console.error('Failed to delete swap:', error);
 			return false;
 		}
+	}
+
+	/**
+	 * Find a submarine swap by invoice
+	 * Checks both active swaps and storage
+	 * 
+	 * @param invoice - Lightning invoice to search for
+	 * @returns Existing swap data or undefined
+	 */
+	private async findSwapByInvoice(invoice: string): Promise<SubmarineSwapData | undefined> {
+		// Check active swaps first (faster, in-memory)
+		const activeSwap = Array.from(this.activeSwaps.values()).find(
+			swap => swap.invoice === invoice
+		);
+		
+		if (activeSwap) {
+			return activeSwap;
+		}
+		
+		// Check storage (slower, but catches recovered swaps)
+		if (this.storage) {
+			try {
+				const allSwaps = await this.storage.loadAll();
+				const storedSwap = allSwaps.find(
+					swap => swap.type === 'submarine' && (swap as SubmarineSwapData).invoice === invoice
+				);
+				
+				if (storedSwap) {
+					return storedSwap as SubmarineSwapData;
+				}
+			} catch (error) {
+				console.warn('⚠️ Failed to check storage for existing swap:', error);
+			}
+		}
+		
+		return undefined;
+	}
+
+	/**
+	 * Prepare result for existing swap
+	 * Ensures swap is in activeSwaps, resubscribes to WebSocket, and recalculates gas if needed
+	 * 
+	 * @param existingSwap - The existing swap data
+	 * @param params - Original creation parameters (for gas estimation)
+	 * @returns Swap result ready for user to complete payment
+	 */
+	private async prepareExistingSwapResult(
+		existingSwap: SubmarineSwapData,
+		params: CreateSubmarineSwapParams
+	): Promise<SubmarineSwapResult> {
+		// Check if swap is still valid (not expired, not failed, not completed)
+		const now = Date.now();
+		const isExpired = existingSwap.expiresAt < now;
+		const isFailed = existingSwap.status === 'transaction.failed' || existingSwap.status === 'swap.expired';
+		const isCompleted = existingSwap.status === 'invoice.paid' || existingSwap.status === 'transaction.claimed';
+		
+		if (isExpired) {
+			throw new Error(
+				`Cannot reuse this invoice - the previous swap has expired. ` +
+				`Please generate a new Lightning invoice.`
+			);
+		}
+		
+		if (isFailed) {
+			throw new Error(
+				`Cannot reuse this invoice - the previous swap has failed. ` +
+				`Please generate a new Lightning invoice.`
+			);
+		}
+		
+		if (isCompleted) {
+			throw new Error(
+				`This invoice has already been paid (swap ${existingSwap.id}). ` +
+				`Please generate a new Lightning invoice.`
+			);
+		}
+		
+		// Swap is still active and can be completed		
+		// Make sure it's in activeSwaps
+		if (!this.activeSwaps.has(existingSwap.id)) {
+			this.activeSwaps.set(existingSwap.id, existingSwap);
+		}
+		
+		// Re-subscribe to WebSocket updates
+		this.websocket.subscribeToSwap(existingSwap.id, async (event) => {
+			await this.handleSwapUpdate(event);
+		});
+		
+		// Recalculate gas estimate if needed (for RBTC)
+		let estimatedGas: SubmarineSwapResult['estimatedGas'];
+		if (params.from === 'RBTC' && params.signer && existingSwap.claimAddress && existingSwap.preimageHash) {
+			try {
+				const gasWei = await this.evmContractService.estimateLockupGas({
+					signer: params.signer,
+					preimageHash: existingSwap.preimageHash,
+					claimAddress: existingSwap.claimAddress,
+					timeoutBlockHeight: existingSwap.timeoutBlockHeight,
+					amountSats: existingSwap.fromAmount
+				});
+
+				const gasSats = weiToSatoshi(gasWei);
+				estimatedGas = {
+					costWei: gasWei,
+					costSats: gasSats,
+					totalRequired: existingSwap.fromAmount + gasSats
+				};
+			} catch (error) {
+				console.warn('⚠️ Failed to estimate gas for existing swap:', error);
+			}
+		}
+		
+		// Return the existing swap - user can proceed to lock funds
+		return {
+			swapId: existingSwap.id,
+			swapData: existingSwap,
+			estimatedGas
+		};
 	}
 }
 

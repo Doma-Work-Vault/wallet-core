@@ -107,7 +107,8 @@ export class EvmContractService {
 
             // Call EtherSwap.lock() function
             // function lock(bytes32 preimageHash, address claimAddress, uint timelock) external payable
-            const tx = await etherSwap.lock(
+            // Use explicit function signature to avoid ambiguity with overloaded functions
+            const tx = await etherSwap["lock(bytes32,address,uint256)"](
                 preimageHashWithPrefix,
                 params.claimAddress,
                 params.timeoutBlockHeight,
@@ -374,7 +375,8 @@ export class EvmContractService {
                 ? params.preimageHash
                 : '0x' + params.preimageHash;
 
-            const gasEstimate = await etherSwap.lock.estimateGas(
+            // Use explicit function signature to avoid ambiguity with overloaded functions
+            const gasEstimate = await etherSwap["lock(bytes32,address,uint256)"].estimateGas(
                 preimageHashWithPrefix,
                 params.claimAddress,
                 params.timeoutBlockHeight,

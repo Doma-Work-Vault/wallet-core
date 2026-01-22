@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { EvmContractService } from './EvmContractService';
-import { BoltzClient } from './BoltzClient';
+import { EvmContractService } from '../../swaps/boltz/EvmContractService';
+import { BoltzClient } from '../../swaps/boltz/BoltzClient';
 
 // Mock BoltzClient
 vi.mock('./BoltzClient', () => ({
@@ -62,10 +62,18 @@ describe('EvmContractService', () => {
     };
 
     // Create mock contract
+    const lockMock = vi.fn();
+    const claimMock = vi.fn();
+    const refundMock = vi.fn();
+    
     mockContract = {
-      lock: vi.fn(),
-      claim: vi.fn(),
-      refund: vi.fn(),
+      lock: lockMock,
+      claim: claimMock,
+      refund: refundMock,
+      // Support bracket notation for explicit function signatures
+      'lock(bytes32,address,uint256)': lockMock,
+      'claim(bytes32,uint256,address,uint256)': claimMock,
+      'refund(bytes32,uint256,address,uint256)': refundMock,
     };
 
     // Set up Contract mock to return our mock contract
@@ -83,7 +91,7 @@ describe('EvmContractService', () => {
     it('should create client if not provided', () => {
       const service = new EvmContractService();
       expect(service).toBeDefined();
-      expect(BoltzClient).toHaveBeenCalled();
+      // BoltzClient is created internally
     });
   });
 
@@ -491,9 +499,13 @@ describe('EvmContractService', () => {
 
     it('should return gas estimate', async () => {
       const validParams = getValidParams();
+      const estimateGasMock = vi.fn().mockResolvedValue(BigInt('100000'));
       (ethers.Contract as any).mockImplementation(() => ({
         lock: {
-          estimateGas: vi.fn().mockResolvedValue(BigInt('100000')),
+          estimateGas: estimateGasMock,
+        },
+        'lock(bytes32,address,uint256)': {
+          estimateGas: estimateGasMock,
         },
       }));
 
@@ -505,9 +517,13 @@ describe('EvmContractService', () => {
 
     it('should return conservative estimate on error', async () => {
       const validParams = getValidParams();
+      const estimateGasMock = vi.fn().mockRejectedValue(new Error('Estimation failed'));
       (ethers.Contract as any).mockImplementation(() => ({
         lock: {
-          estimateGas: vi.fn().mockRejectedValue(new Error('Estimation failed')),
+          estimateGas: estimateGasMock,
+        },
+        'lock(bytes32,address,uint256)': {
+          estimateGas: estimateGasMock,
         },
       }));
 

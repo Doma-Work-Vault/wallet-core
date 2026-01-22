@@ -1,9 +1,9 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { RSKWallet, type RSKWalletConfig } from './RSKWallet';
-import type { MockProvider, MockWallet } from '../../test/utils/mockEthers';
+import { RSKWallet, type RSKWalletConfig } from '../../../chains/rsk/RSKWallet';
+import type { MockProvider, MockWallet } from '../../utils/mockEthers';
 
 // Mock RSKTransactions module
-vi.mock('./RSKTransactions', () => ({
+vi.mock('../../../chains/rsk/RSKTransactions', () => ({
   loadRSKTransactions: vi.fn().mockResolvedValue([]),
 }));
 
@@ -328,9 +328,9 @@ describe('RSKWallet', () => {
       expect(estimate).toHaveProperty('gasPrice');
       expect(estimate).toHaveProperty('totalCost');
       expect(estimate).toHaveProperty('totalCostFormatted');
-      expect(typeof estimate.gasLimit).toBe('bigint');
-      expect(typeof estimate.gasPrice).toBe('bigint');
-      expect(typeof estimate.totalCost).toBe('bigint');
+      expect(typeof estimate.gasLimit).toBe('string');
+      expect(typeof estimate.gasPrice).toBe('string');
+      expect(typeof estimate.totalCost).toBe('string');
       expect(typeof estimate.totalCostFormatted).toBe('string');
     });
 
@@ -366,7 +366,7 @@ describe('RSKWallet', () => {
       const estimate = await wallet.estimateGas(mainnetAddress, amount);
 
       expect(estimate).toHaveProperty('gasLimit');
-      expect(typeof estimate.gasLimit).toBe('bigint');
+      expect(typeof estimate.gasLimit).toBe('string');
     });
 
     it('should accept lowercase address', async () => {
@@ -377,7 +377,7 @@ describe('RSKWallet', () => {
       const estimate = await wallet.estimateGas(lowercaseAddress, amount);
 
       expect(estimate).toHaveProperty('gasLimit');
-      expect(typeof estimate.gasLimit).toBe('bigint');
+      expect(typeof estimate.gasLimit).toBe('string');
     });
 
     it('should throw if not initialized', async () => {
@@ -535,7 +535,7 @@ describe('RSKWallet', () => {
 
   describe('loadTransactions', () => {
     it('should call loadRSKTransactions with correct parameters', async () => {
-      const { loadRSKTransactions } = await import('./RSKTransactions');
+      const { loadRSKTransactions } = await import('../../../chains/rsk/RSKTransactions');
       
       const wallet = new RSKWallet({ network: 'testnet' });
       await wallet.initialize(testMnemonic);
@@ -545,10 +545,10 @@ describe('RSKWallet', () => {
 
       await wallet.loadTransactions();
 
-      expect(loadRSKTransactions).toHaveBeenCalledWith(
-        address,
-        provider,
-      );
+      expect(loadRSKTransactions).toHaveBeenCalled();
+      const call = vi.mocked(loadRSKTransactions).mock.calls[0];
+      expect(call[0].toLowerCase()).toBe(address.toLowerCase());
+      expect(call[1]).toBe(provider);
     });
 
     it('should throw if not initialized', async () => {

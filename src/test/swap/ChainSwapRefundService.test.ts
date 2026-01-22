@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { ChainSwapRefundService } from './ChainSwapRefundService';
-import { BoltzClient } from './BoltzClient';
-import type { ChainSwapData, ChainSwapRefundParams } from './types';
+import { ChainSwapRefundService } from '../../swaps/boltz/ChainSwapRefundService';
+import { BoltzClient } from '../../swaps/boltz/BoltzClient';
+import type { ChainSwapData, ChainSwapRefundParams } from '../../swaps/boltz/types';
 
 // Mock dependencies
 vi.mock('./BoltzClient');

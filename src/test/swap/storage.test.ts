@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { InMemorySwapStorage, type SwapStorage } from './storage';
+import { InMemorySwapStorage, type SwapStorage } from '../../swaps/boltz/storage';
 
 describe('InMemorySwapStorage', () => {
   let storage: InMemorySwapStorage;

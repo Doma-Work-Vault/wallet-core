@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
-import { BoltzWebSocket } from './WebSocketClient';
+import { BoltzWebSocket } from '../../swaps/boltz/WebSocketClient';
 
 // Polyfill CloseEvent for Node.js environment
 if (typeof CloseEvent === 'undefined') {

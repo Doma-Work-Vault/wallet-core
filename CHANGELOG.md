@@ -5,6 +5,28 @@ All notable changes to @bittasker/wallet-core will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.9] - 2026-01-22
+
+### Fixed
+- **Boltz API Compatibility**: Convert EIP-1191 addresses to EIP-55 format before sending to Boltz API
+  - Fixes "invalid Ethereum address" error from Boltz
+  - Added `toEip55ChecksumAddress()` utility function
+  - Applied in ReverseSwapService and ChainSwapService
+- **Duplicate Invoice Handling**: Gracefully handle duplicate Lightning invoices in SubmarineSwapService
+  - Returns existing swap data instead of throwing error
+  - Resubscribes to WebSocket updates for recovered swaps
+  - Prevents "swap with this invoice exists already" errors
+- **Ambiguous Function Signature**: Resolve ethers.js v6 ambiguous function error
+  - Use explicit signature notation: `etherSwap["lock(bytes32,address,uint256)"]`
+  - Prevents TypeError when creating reverse submarine swaps
+  - Future-proof against contract versions with overloaded functions
+
+### Changed
+- Updated test mocks to support bracket notation for contract methods
+- Enhanced address format handling for better Boltz API compatibility
+
+[0.1.9]: https://gitlab.com/bittasker/wallet-core/-/tags/v0.1.9
+
 ## [0.1.8] - 2026-01-21
 
 ### Added

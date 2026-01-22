@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { BSCPaymasterContract, PostOpMode } from './BSCPaymaster';
+import { BSCPaymasterContract, PostOpMode } from '../../../chains/bsc/BSCPaymaster';
 import { ethers } from 'ethers';
-import type { PaymasterConfig } from '../../core/types';
+import type { PaymasterConfig } from '../../../core/types';
 
 describe('BSCPaymasterContract', () => {
   let mockProvider: any;

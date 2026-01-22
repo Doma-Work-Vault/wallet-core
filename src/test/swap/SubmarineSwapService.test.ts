@@ -1,10 +1,10 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { SubmarineSwapService } from './SubmarineSwapService';
-import { BoltzClient } from './BoltzClient';
-import { BoltzWebSocket } from './WebSocketClient';
-import { EvmContractService } from './EvmContractService';
-import { SubmarineSwapRefundService } from './SubmarineSwapRefundService';
-import type { SwapStorage, SubmarineSwapData, SwapEvent } from './types';
+import { SubmarineSwapService } from '../../swaps/boltz/SubmarineSwapService';
+import { BoltzClient } from '../../swaps/boltz/BoltzClient';
+import { BoltzWebSocket } from '../../swaps/boltz/WebSocketClient';
+import { EvmContractService } from '../../swaps/boltz/EvmContractService';
+import { SubmarineSwapRefundService } from '../../swaps/boltz/SubmarineSwapRefundService';
+import type { SwapStorage, SubmarineSwapData, SwapEvent } from '../../swaps/boltz/types';
 import * as ethers from 'ethers';
 
 // Mock dependencies
@@ -14,6 +14,7 @@ vi.mock('./EvmContractService');
 vi.mock('./SubmarineSwapRefundService', () => ({
   SubmarineSwapRefundService: vi.fn().mockImplementation(() => ({
     setEvmContractService: vi.fn(),
+    isSwapRefundable: vi.fn().mockResolvedValue({ refundable: true }),
     refundSubmarineSwap: vi.fn().mockResolvedValue({
       swapData: {} as SubmarineSwapData,
       txHash: '0x' + 'refund'.repeat(16),
@@ -123,6 +124,13 @@ describe('SubmarineSwapService', () => {
 
     // Get the refund service instance
     mockRefundService = (service as any).refundService;
+    if (mockRefundService) {
+      vi.spyOn(mockRefundService, 'isSwapRefundable').mockResolvedValue({ refundable: true });
+      vi.spyOn(mockRefundService, 'refundSubmarineSwap').mockResolvedValue({
+        swapData: {} as SubmarineSwapData,
+        txHash: '0x' + 'refund'.repeat(16),
+      });
+    }
   });
 
   describe('Constructor', () => {
@@ -450,6 +458,7 @@ describe('SubmarineSwapService', () => {
         updatedAt: Date.now(),
         expiresAt: Date.now() + 86400000,
         refundPublicKey: 'refund-pubkey',
+        lockupTxHash: '0x' + 'l'.repeat(64), // Add lockup transaction hash
       };
 
       service['activeSwaps'].set('swap-123', swapData);

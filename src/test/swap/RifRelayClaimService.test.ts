@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { RifRelayClaimService } from './RifRelayClaimService';
+import { RifRelayClaimService } from '../../swaps/boltz/RifRelayClaimService';
 import { ethers } from 'ethers';
 
 // Mock dependencies
@@ -7,7 +7,7 @@ vi.mock('../../utils/networkConfig', () => ({
   isRifRelayAvailable: vi.fn(() => true),
 }));
 
-vi.mock('../rif/Signer', () => ({
+vi.mock('../../swaps/rif/Signer', () => ({
   relayClaimTransaction: vi.fn().mockResolvedValue('0x' + 'relay'.repeat(16)),
 }));
 
@@ -124,7 +124,7 @@ describe('RifRelayClaimService', () => {
 
     it('should claim via RIF Relay successfully', async () => {
       const validParams = getValidParams();
-      const { relayClaimTransaction } = await import('../rif/Signer');
+      const { relayClaimTransaction } = await import('../../swaps/rif/Signer');
       const relaySpy = vi.mocked(relayClaimTransaction);
       
       const result = await service.claimViaRifRelay(validParams);
@@ -135,7 +135,7 @@ describe('RifRelayClaimService', () => {
 
     it('should handle errors', async () => {
       const validParams = getValidParams();
-      const { relayClaimTransaction } = await import('../rif/Signer');
+      const { relayClaimTransaction } = await import('../../swaps/rif/Signer');
       const relaySpy = vi.mocked(relayClaimTransaction);
       relaySpy.mockRejectedValueOnce(new Error('RIF Relay failed'));
 
