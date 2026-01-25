@@ -5,6 +5,28 @@ All notable changes to @bittasker/wallet-core will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.10] - 2026-01-25
+
+### Fixed
+- **ethers.js Address Validation**: Fixed `ethers.isAddress()` failing with EIP-1191 checksummed addresses
+  - ethers.js v6 only recognizes EIP-55 (Ethereum) checksums
+  - EIP-1191 (RSK) checksummed addresses were incorrectly marked as invalid
+  - Solution: Normalize addresses to lowercase before calling `ethers.isAddress()`
+  - Ensures RSK addresses pass validation while maintaining format flexibility
+
+### Technical
+- EIP-1191 addresses use chain ID in checksum calculation, creating different checksums than EIP-55
+- ethers.js rejects EIP-1191 checksums as invalid, even though addresses are legitimate
+- Lowercasing removes checksum before validation, allowing ethers.js to validate the base address
+- Does not affect EIP-1191 checksum generation or validation in our utilities
+
+### Benefits
+- **Better Compatibility**: RSK EIP-1191 addresses now work seamlessly with ethers.js
+- **Consistent Validation**: Address validation behaves predictably across all formats
+- **No Breaking Changes**: Existing code continues to work without modification
+
+[0.1.10]: https://gitlab.com/bittasker/wallet-core/-/tags/v0.1.10
+
 ## [0.1.9] - 2026-01-22
 
 ### Fixed
