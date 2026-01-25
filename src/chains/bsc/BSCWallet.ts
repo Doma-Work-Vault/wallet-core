@@ -147,7 +147,7 @@ export class BSCWallet {
         }
 
         try {
-            if (!ethers.isAddress(to)) {
+            if (!ethers.isAddress(to.toLowerCase())) {
                 throw new Error('Invalid recipient address');
             }
 
@@ -192,7 +192,7 @@ export class BSCWallet {
         }
 
         try {
-            if (!ethers.isAddress(to)) {
+            if (!ethers.isAddress(to.toLowerCase())) {
                 throw new Error('Invalid recipient address');
             }
 

@@ -39,7 +39,7 @@ export class RifRelayClaimService {
                 throw new Error('Wallet signer is required');
             }
 
-            if (!params.contractAddress || !ethers.isAddress(params.contractAddress)) {
+            if (!params.contractAddress || !ethers.isAddress(params.contractAddress.toLowerCase())) {
                 throw new Error('Invalid contract address');
             }
 
@@ -47,7 +47,7 @@ export class RifRelayClaimService {
                 throw new Error('Invalid preimage: must be 32 bytes (64 hex characters)');
             }
 
-            if (!params.refundAddress || !ethers.isAddress(params.refundAddress)) {
+            if (!params.refundAddress || !ethers.isAddress(params.refundAddress.toLowerCase())) {
                 throw new Error('Invalid refund address');
             }
 

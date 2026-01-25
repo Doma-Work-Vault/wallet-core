@@ -1,12 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { ReverseSwapService } from '../../swaps/boltz/ReverseSwapService';
-import { BoltzClient } from '../../swaps/boltz/BoltzClient';
-import { BoltzWebSocket } from '../../swaps/boltz/WebSocketClient';
-import { EvmContractService } from '../../swaps/boltz/EvmContractService';
-import { RifRelayClaimService } from '../../swaps/boltz/RifRelayClaimService';
 import type { SwapStorage } from '../../swaps/boltz/storage';
 import type { BoltzSwapData, SwapEvent } from '../../swaps/boltz/types';
-import * as ethers from 'ethers';
 
 // Note: ethers.isAddress is used directly, so we need to ensure it works
 // The actual ethers module will be imported and used

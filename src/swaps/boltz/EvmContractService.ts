@@ -79,7 +79,7 @@ export class EvmContractService {
                 throw new Error('Invalid preimage hash: must be 32 bytes (64 hex characters)');
             }
 
-            if (!params.claimAddress || !ethers.isAddress(params.claimAddress)) {
+            if (!params.claimAddress || !ethers.isAddress(params.claimAddress.toLowerCase())) {
                 throw new Error('Invalid claim address');
             }
 
@@ -149,7 +149,7 @@ export class EvmContractService {
                 throw new Error('Invalid preimage: must be 32 bytes (64 hex characters)');
             }
 
-            if (!params.refundAddress || !ethers.isAddress(params.refundAddress)) {
+            if (!params.refundAddress || !ethers.isAddress(params.refundAddress.toLowerCase())) {
                 throw new Error('Invalid refund address');
             }
 
@@ -220,7 +220,7 @@ export class EvmContractService {
                 throw new Error('Invalid preimage hash: must be 32 bytes (64 hex characters)');
             }
 
-            if (!params.claimAddress || !ethers.isAddress(params.claimAddress)) {
+            if (!params.claimAddress || !ethers.isAddress(params.claimAddress.toLowerCase())) {
                 throw new Error('Invalid claim address');
             }
 

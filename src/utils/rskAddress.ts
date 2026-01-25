@@ -57,7 +57,7 @@ export function areSameRskAddress(a?: string, b?: string): boolean {
 	if (!a || !b) {
 		return false;
 	}
-	if (!ethers.isAddress(a) || !ethers.isAddress(b)) {
+	if (!ethers.isAddress(a.toLowerCase()) || !ethers.isAddress(b.toLowerCase())) {
 		return false;
 	}
 	return normalizeHexAddress(a) === normalizeHexAddress(b);
