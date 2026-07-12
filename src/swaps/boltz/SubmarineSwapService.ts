@@ -53,6 +53,7 @@ import { SubmarineSwapRefundService } from './SubmarineSwapRefundService';
 import { weiToSatoshi } from '../../utils/networkConfig';
 import { EventBus } from '../../core/EventBus';
 import bolt11 from 'bolt11';
+import type { Tag } from 'bolt11';
 
 export class SubmarineSwapService {
 	private boltzClient: BoltzClient;
@@ -168,7 +169,7 @@ export class SubmarineSwapService {
 				: 0; // Some invoices may not have an amount (amount-less invoices)
 
 			// Extract the payment hash (preimage hash)
-			const paymentHashTag = decodedInvoice.tags.find((tag) => tag.tagName === 'payment_hash');
+			const paymentHashTag = decodedInvoice.tags.find((tag: Tag) => tag.tagName === 'payment_hash');
 
 			if (!paymentHashTag) {
 				throw new Error('Invoice does not contain payment hash');

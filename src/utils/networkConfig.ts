@@ -1,9 +1,9 @@
 /**
  * Network Configuration
- * 
+ *
  * This file centralizes ALL network endpoints, RPC URLs, API URLs, and blockchain explorers
  * for RSK, BSC, Boltz, Liquid, and related services.
- * 
+ *
  * Features:
  * - RSK (Rootstock) wallet configuration
  * - BSC (Binance Smart Chain) wallet configuration
@@ -55,7 +55,7 @@ export type FeeTier = keyof typeof FEE_TIERS;
 // Timelock constants (in seconds)
 export const TIMELOCK_PERIODS = {
 	COMPLETION: 7 * 24 * 60 * 60, // 7 days
-	DISPUTE: 14 * 24 * 60 * 60    // 14 days
+	DISPUTE: 14 * 24 * 60 * 60 // 14 days
 } as const;
 
 // ERC-20 ABI (minimal for basic operations)
@@ -244,6 +244,80 @@ export const BSC_NETWORKS = {
 	}
 } as const;
 
+// Arbitrum token addresses (canonical, exported for app-level usage)
+export const ARB_TOKEN_ADDRESSES = {
+	USDT0: '0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9',
+	WBTC: '0x2f2a2543B76A4166549F7aaB2e75Bef0aefC5B0f',
+	TBTC: '0x6c84a8f1c29108F47a79964b5Fe888D4f4D0dE40',
+} as const;
+
+// Arbitrum Network Configuration
+export const ARB_NETWORKS = {
+	mainnet: {
+		name: 'Arbitrum One',
+		chainId: 42161,
+		rpcUrl: 'https://arb1.arbitrum.io/rpc',
+		explorerUrl: 'https://arbiscan.io',
+		explorerApiUrl: 'https://api.arbiscan.io/api',
+		currency: { name: 'Ethereum', symbol: 'ETH', decimals: 18 },
+		tokens: [
+			{
+				address: ARB_TOKEN_ADDRESSES.USDT0,
+				symbol: 'USDT0',
+				name: 'USDT0 (Tether USD on Arbitrum)',
+				decimals: 6
+			},
+			{
+				address: ARB_TOKEN_ADDRESSES.WBTC,
+				symbol: 'WBTC',
+				name: 'Wrapped Bitcoin',
+				decimals: 8
+			},
+			{
+				address: ARB_TOKEN_ADDRESSES.TBTC,
+				symbol: 'TBTC',
+				name: 'tBTC v2',
+				decimals: 18
+			}
+		] as ERC20Token[]
+	},
+	testnet: {
+		name: 'Arbitrum Sepolia',
+		chainId: 421614,
+		rpcUrl: 'https://sepolia-rollup.arbitrum.io/rpc',
+		explorerUrl: 'https://sepolia.arbiscan.io',
+		explorerApiUrl: 'https://api-sepolia.arbiscan.io/api',
+		currency: { name: 'Ethereum', symbol: 'ETH', decimals: 18 },
+		tokens: [] as ERC20Token[]
+	}
+} as const;
+
+// LayerZero EID constants
+export const LAYERZERO_EIDS = {
+	ROOTSTOCK: 30333,
+	ARBITRUM: 30110,
+	ETHEREUM: 30101
+} as const;
+
+// RSK Token Configurations (DOC, USDT0)
+export const RSK_TOKENS = {
+	mainnet: [
+		{
+			address: '0xe700691dA7b9851F2F35f8b8182c69c53CcaD9Db',
+			symbol: 'DOC',
+			name: 'Dollar on Chain',
+			decimals: 18
+		},
+		{
+			address: '0x779Ded0c9e1022225f8E0630b35a9b54bE713736',
+			symbol: 'USDT0',
+			name: 'USDT0 on Rootstock',
+			decimals: 6
+		}
+	] as ERC20Token[],
+	testnet: [] as ERC20Token[]
+} as const;
+
 /**
  * BSC Paymaster Contract configurations
  */
@@ -318,7 +392,8 @@ export function getRSKConfig() {
 
 export function getBSCConfig() {
 	const network = getNetwork();
-	const env = network === 'regtest' ? 'testnet' : network as Extract<NetworkType, 'mainnet' | 'testnet'>;
+	const env =
+		network === 'regtest' ? 'testnet' : (network as Extract<NetworkType, 'mainnet' | 'testnet'>);
 	return BSC_NETWORKS[env] || BSC_NETWORKS.testnet;
 }
 
@@ -329,7 +404,7 @@ export function getBSCPaymasterConfig(): PaymasterConfig {
 
 export function getUSDTToken(): ERC20Token | undefined {
 	const networkConfig = getBSCConfig();
-	return networkConfig.tokens.find(token => token.symbol === 'USDT' || token.symbol === 'tUSDT');
+	return networkConfig.tokens.find((token) => token.symbol === 'USDT' || token.symbol === 'tUSDT');
 }
 
 export function getMulticallAddress(): string | null {
@@ -379,4 +454,23 @@ export function weiToSatoshi(wei: bigint): number {
 export function getWebSocketEndpoint(): string {
 	const config = getBoltzConfig();
 	return config.boltzWsUrl;
+}
+
+/**
+ * Get Arbitrum network config for current network
+ */
+export function getArbConfig() {
+	const network = getNetwork();
+	const env =
+		network === 'regtest' ? 'testnet' : (network as Extract<NetworkType, 'mainnet' | 'testnet'>);
+	return ARB_NETWORKS[env] || ARB_NETWORKS.testnet;
+}
+
+/**
+ * Get RSK token config by symbol (DOC or USDT0)
+ */
+export function getRSKToken(symbol: 'DOC' | 'USDT0'): ERC20Token | undefined {
+	const network = getNetwork();
+	const env = network === 'regtest' ? 'testnet' : (network as 'mainnet' | 'testnet');
+	return RSK_TOKENS[env]?.find((token) => token.symbol === symbol);
 }

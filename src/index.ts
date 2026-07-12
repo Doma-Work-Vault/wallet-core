@@ -7,15 +7,21 @@
 export { EventBus } from './core/EventBus';
 export type { EventCallback } from './core/EventBus';
 export type {
-    WalletState,
-    Transaction,
-    NetworkType,
-    ERC20Token,
-    PaymasterConfig,
-    WalletAsset,
-    GasEstimation,
-    TokenBalance,
-    BoltzNetworkConfig
+	WalletState,
+	Transaction,
+	NetworkType,
+	ERC20Token,
+	PaymasterConfig,
+	WalletAsset,
+	GasEstimation,
+	TokenBalance,
+	BoltzNetworkConfig,
+	MoCMintParams,
+	Usdt0BridgeParams,
+	LoanFlowStep,
+	LoanPhase,
+	LoanFlowState,
+	ArbitrumNetworkConfig
 } from './core/types';
 
 // Chain wallets
@@ -24,37 +30,45 @@ export { loadRSKTransactions, getSwapAddress } from './chains/rsk/RSKTransaction
 export { BSCWallet } from './chains/bsc/BSCWallet';
 export { loadBSCTransactions } from './chains/bsc/BSCTransactions';
 export { BSCPaymasterContract, PostOpMode } from './chains/bsc/BSCPaymaster';
+export { ArbitrumWallet } from './chains/arbitrum/ArbitrumWallet';
+export type { ArbitrumWalletConfig } from './chains/arbitrum/ArbitrumWallet';
 
 // Network configuration
 export {
-    RSK_NETWORKS,
-    BSC_NETWORKS,
-    BOLTZ_NETWORKS,
-    ERC20_ABI,
-    PAYMASTER_ABI,
-    FEE_TIERS,
-    getBoltzConfig,
-    getRSKConfig,
-    getBSCConfig,
-    getBSCPaymasterConfig,
-    getUSDTToken,
-    getMulticallAddress,
-    isRifRelayAvailable,
-    satoshiToWei,
-    weiToSatoshi,
-    getWebSocketEndpoint,
-    SATOSHI_TO_WEI
+	RSK_NETWORKS,
+	BSC_NETWORKS,
+	ARB_NETWORKS,
+	ARB_TOKEN_ADDRESSES,
+	LAYERZERO_EIDS,
+	RSK_TOKENS,
+	BOLTZ_NETWORKS,
+	ERC20_ABI,
+	PAYMASTER_ABI,
+	FEE_TIERS,
+	getBoltzConfig,
+	getRSKConfig,
+	getBSCConfig,
+	getArbConfig,
+	getRSKToken,
+	getBSCPaymasterConfig,
+	getUSDTToken,
+	getMulticallAddress,
+	isRifRelayAvailable,
+	satoshiToWei,
+	weiToSatoshi,
+	getWebSocketEndpoint,
+	SATOSHI_TO_WEI
 } from './utils/networkConfig';
 
 export type { RSKNetwork, FeeTier } from './utils/networkConfig';
 
 // RSK address utilities (EIP-1191)
 export {
-    toEip1191ChecksumAddress,
-    isValidRskAddress,
-    normalizeRskAddress,
-    areSameRskAddress,
-    toEip55ChecksumAddress
+	toEip1191ChecksumAddress,
+	isValidRskAddress,
+	normalizeRskAddress,
+	areSameRskAddress,
+	toEip55ChecksumAddress
 } from './utils/rskAddress';
 
 // Wallet Manager - Main orchestration class
@@ -76,42 +90,42 @@ export { SubmarineSwapRefundService } from './swaps/boltz/SubmarineSwapRefundSer
 
 export { EvmContractService } from './swaps/boltz/EvmContractService';
 export type {
-    // Chain refund service
-    ChainSwapRefundCheck,
-    ChainSwapRefundParams,
-    ChainSwapRefundResult,
+	// Chain refund service
+	ChainSwapRefundCheck,
+	ChainSwapRefundParams,
+	ChainSwapRefundResult,
 
-    // Submarine refund service
-    SubmarineRefundCheck,
-    SubmarineRefundParams,
-    SubmarineRefundResult,
+	// Submarine refund service
+	SubmarineRefundCheck,
+	SubmarineRefundParams,
+	SubmarineRefundResult,
 
-    // Evm contract service
-    EvmLockupParams,
-    EvmLockupResult,
-    EvmClaimParams,
-    EvmClaimResult,
-    EvmRefundParams,
-    EvmRefundResult,
-    LockupEventParams,
+	// Evm contract service
+	EvmLockupParams,
+	EvmLockupResult,
+	EvmClaimParams,
+	EvmClaimResult,
+	EvmRefundParams,
+	EvmRefundResult,
+	LockupEventParams,
 
-    // RIF Relay service
-    RifRelayClaimParams,
+	// RIF Relay service
+	RifRelayClaimParams,
 
-    // Boltz swap types
-    BoltzSwapData,
-    ChainSwapData,
-    SubmarineSwapData,
-    SwapStatus,
-    ChainSwapStatus,
-    SubmarineSwapStatus,
-    SwapEvent,
-    SwapUpdateEvent,
-    ContractAddresses,
-    CreateSubmarineSwapParams,
-    SubmarineSwapResult,
-    SwapPairs,
-    LockupInfo,
+	// Boltz swap types
+	BoltzSwapData,
+	ChainSwapData,
+	SubmarineSwapData,
+	SwapStatus,
+	ChainSwapStatus,
+	SubmarineSwapStatus,
+	SwapEvent,
+	SwapUpdateEvent,
+	ContractAddresses,
+	CreateSubmarineSwapParams,
+	SubmarineSwapResult,
+	SwapPairs,
+	LockupInfo
 } from './swaps/boltz/types';
 
 // RIF Relay gasless claiming service
@@ -124,3 +138,11 @@ export { estimate, relay, getChainInfo } from './swaps/rif/Relay';
 export type { Metadata } from './swaps/rif/Relay';
 export type { EnvelopingRequest } from './swaps/rif/types/TypedRequestData';
 
+// Loan services — RBTC-backed USDT0 on Arbitrum
+export { MoCMintingService, MOC_PROXY_ADDRESS } from './loans/MoCMintingService';
+export {
+	Usdt0BridgeService,
+	OFT_RSK_ADDRESS,
+	OFT_ARBITRUM_ADDRESS,
+	AUTO_APPROVE_BUFFER
+} from './loans/Usdt0BridgeService';
