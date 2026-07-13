@@ -15,10 +15,12 @@ import type { NetworkType } from './types';
 import type { SwapStorage } from '../swaps/boltz/storage';
 import type { RSKWalletConfig } from '../chains/rsk/RSKWallet';
 import type { BSCWalletConfig } from '../chains/bsc/BSCWallet';
+import type { ArbitrumWalletConfig } from '../chains/arbitrum/ArbitrumWallet';
 import type { SwapUpdateEvent } from '../swaps/boltz/types';
 import { setNetworkGetter, getWebSocketEndpoint } from '../utils/networkConfig';
 import { RSKWallet } from '../chains/rsk/RSKWallet';
 import { BSCWallet } from '../chains/bsc/BSCWallet';
+import { ArbitrumWallet } from '../chains/arbitrum/ArbitrumWallet';
 import { ChainSwapService } from '../swaps/boltz/ChainSwapService';
 import { ReverseSwapService } from '../swaps/boltz/ReverseSwapService';
 import { SubmarineSwapService } from '../swaps/boltz/SubmarineSwapService';
@@ -38,6 +40,9 @@ export interface WalletManagerConfig {
 
 	/** Optional BSC wallet configuration overrides */
 	bscConfig?: Partial<BSCWalletConfig>;
+
+	/** Optional Arbitrum wallet configuration overrides */
+	arbConfig?: Partial<ArbitrumWalletConfig>;
 
 	/** 
 	 * Optional swap storage adapter (e.g., Nostr, IndexedDB, localStorage)
@@ -66,6 +71,10 @@ export interface WalletBalances {
 		bnb: string;
 		tokens: Record<string, string>;
 	};
+	arbitrum: {
+		eth: string;
+		tokens: Record<string, string>;
+	};
 }
 
 export interface SwapLimits {
@@ -90,6 +99,7 @@ export class WalletManager {
 	private config: WalletManagerConfig;
 	private _rskWallet: RSKWallet | null = null;
 	private _bscWallet: BSCWallet | null = null;
+	private _arbWallet: ArbitrumWallet | null = null;
 	private _websocket: BoltzWebSocket | null = null;
 	private _boltzClient: BoltzClient | null = null;
 	private _evmContractService: EvmContractService | null = null;
@@ -112,8 +122,9 @@ export class WalletManager {
 	async initialize(): Promise<void> {
 		// Initialize wallets in parallel for better performance
 		const bscNetwork = (this.config.network === 'regtest' ? 'testnet' : this.config.network) as 'mainnet' | 'testnet';
+		const arbNetwork = (this.config.network === 'regtest' ? 'testnet' : this.config.network) as 'mainnet' | 'testnet';
 
-		const [rskWallet, bscWallet] = await Promise.all([
+		const [rskWallet, bscWallet, arbWallet] = await Promise.all([
 			(async () => {
 				const wallet = new RSKWallet({
 					network: this.config.network,
@@ -129,11 +140,20 @@ export class WalletManager {
 				});
 				await wallet.initialize(this.config.mnemonic);
 				return wallet;
+			})(),
+			(async () => {
+				const wallet = new ArbitrumWallet({
+					network: arbNetwork,
+					...this.config.arbConfig
+				});
+				await wallet.initialize(this.config.mnemonic);
+				return wallet;
 			})()
 		]);
 
 		this._rskWallet = rskWallet;
 		this._bscWallet = bscWallet;
+		this._arbWallet = arbWallet;
 
 		// Websocket connection is required for swap monitoring 
 		// Lazy loading won't work for wallet getters (asynchronous limitation)
@@ -175,6 +195,16 @@ export class WalletManager {
 			throw new Error('WalletManager not initialized. Call initialize() first.');
 		}
 		return this._bscWallet;
+	}
+
+	/**
+	 * Get Arbitrum wallet instance
+	 */
+	get arbWallet(): ArbitrumWallet {
+		if (!this._arbWallet) {
+			throw new Error('WalletManager not initialized. Call initialize() first.');
+		}
+		return this._arbWallet;
 	}
 
 	/**
@@ -282,17 +312,39 @@ export class WalletManager {
 	 * Get all wallet balances
 	 */
 	async getBalances(): Promise<WalletBalances> {
-		const rskBalance = await this.rskWallet.getBalance();
-		const bscBalances = await this.bscWallet.getBalances();
+		const [rskBalance, bscBalances, arbBalances] = await Promise.all([
+			this.rskWallet.getBalance(),
+			this.bscWallet.getBalances(),
+			this.arbWallet.getBalances()
+		]);
+
+		// Build token records for RSK
+		const rskTokens: Record<string, string> = {};
+
+		// Build token records for BSC
+		const bscTokens: Record<string, string> = {};
+		if (bscBalances.usdt.balance > BigInt(0)) {
+			bscTokens['USDT'] = bscBalances.usdt.formatted;
+		}
+
+		// Build token records for Arbitrum
+		const arbTokens: Record<string, string> = {};
+		if (arbBalances.usdt0.balance > BigInt(0)) {
+			arbTokens['USDT0'] = arbBalances.usdt0.formatted;
+		}
 
 		return {
 			rsk: {
 				rbtc: rskBalance.formatted,
-				tokens: {} // TODO: Add token balance support
+				tokens: rskTokens
 			},
 			bsc: {
 				bnb: bscBalances.bnb.formatted,
-				tokens: {} // TODO: Add token balance support
+				tokens: bscTokens
+			},
+			arbitrum: {
+				eth: arbBalances.eth.formatted,
+				tokens: arbTokens
 			}
 		};
 	}
@@ -318,10 +370,12 @@ export class WalletManager {
 	getAddresses(): {
 		rsk: string;
 		bsc: string;
+		arbitrum: string;
 	} {
 		return {
 			rsk: this.rskWallet.getAddress(),
-			bsc: this.bscWallet.getAddress()
+			bsc: this.bscWallet.getAddress(),
+			arbitrum: this.arbWallet.getAddress()
 		};
 	}
 
@@ -337,6 +391,13 @@ export class WalletManager {
 	 */
 	getBSCWallet(): Signer {
 		return this.bscWallet.getWallet();
+	}
+
+	/**
+	 * Get Arbitrum wallet (ethers.Wallet) for advanced use cases
+	 */
+	getArbWallet(): Signer {
+		return this.arbWallet.getWallet();
 	}
 
 	/**
@@ -376,6 +437,7 @@ export class WalletManager {
 		// Clean up wallets
 		if (this._rskWallet) this._rskWallet.disconnect();
 		if (this._bscWallet) this._bscWallet.disconnect();
+		if (this._arbWallet) this._arbWallet.disconnect();
 
 		// Clean up WebSocket
 		if (this._websocket) this._websocket.disconnect();

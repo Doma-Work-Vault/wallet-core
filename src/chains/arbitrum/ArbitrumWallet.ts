@@ -5,14 +5,14 @@
  */
 
 import { ethers } from 'ethers';
-import type { NetworkType, ERC20Token, TokenBalance } from '../../core/types';
+import type { NetworkType, ERC20Token, TokenBalance, Transaction } from '../../core/types';
 import { ARB_NETWORKS, ERC20_ABI } from '../../utils/networkConfig';
+import { loadArbitrumTransactions } from './ArbitrumTransactions';
 
 export interface ArbitrumWalletConfig {
 	network: Extract<NetworkType, 'mainnet' | 'testnet'>;
 	rpcUrl?: string;
 	pollingInterval?: number;
-	arbiscanApiKey?: string;
 }
 
 export class ArbitrumWallet {
@@ -419,6 +419,20 @@ export class ArbitrumWallet {
 	 */
 	getUSDT0Contract(): ethers.Contract | null {
 		return this.tokenContracts.get('USDT0') ?? null;
+	}
+
+	/**
+	 * Load transaction history
+	 * Includes ETH and all configured ERC-20 token transactions
+	 *
+	 * @param apiKey - Optional Arbiscan API key for higher rate limits
+	 */
+	async loadTransactions(apiKey?: string): Promise<Transaction[]> {
+		if (!this.wallet) {
+			throw new Error('Wallet not initialized');
+		}
+
+		return await loadArbitrumTransactions(this.wallet.address, apiKey);
 	}
 
 	/**

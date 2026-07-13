@@ -288,6 +288,8 @@ export const ARB_NETWORKS = {
 		explorerUrl: 'https://sepolia.arbiscan.io',
 		explorerApiUrl: 'https://api-sepolia.arbiscan.io/api',
 		currency: { name: 'Ethereum', symbol: 'ETH', decimals: 18 },
+		// USDT0, WBTC, and tBTC are not deployed on Arbitrum Sepolia.
+		// To test on testnet, deploy mock ERC-20 contracts and add their addresses here.
 		tokens: [] as ERC20Token[]
 	}
 } as const;
@@ -315,7 +317,14 @@ export const RSK_TOKENS = {
 			decimals: 6
 		}
 	] as ERC20Token[],
-	testnet: [] as ERC20Token[]
+	testnet: [
+		{
+			address: '0xcb440023442e4A51A67Df905b5C76126F6866090',
+			symbol: 'DOC',
+			name: 'Dollar on Chain (Testnet)',
+			decimals: 18
+		}
+	] as ERC20Token[]
 } as const;
 
 /**

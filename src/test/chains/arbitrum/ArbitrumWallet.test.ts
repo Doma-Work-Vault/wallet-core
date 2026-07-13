@@ -293,4 +293,30 @@ describe('ArbitrumWallet', () => {
 			expect(result.formatted).toBe('0.000000');
 		});
 	});
+
+	describe('loadTransactions', () => {
+		it('should throw if not initialized', async () => {
+			const wallet = new ArbitrumWallet({ network: 'mainnet' });
+			await expect(wallet.loadTransactions()).rejects.toThrow('Wallet not initialized');
+		});
+
+		it('should be callable after initialization', async () => {
+			// Mock fetch for this test
+			const originalFetch = globalThis.fetch;
+			globalThis.fetch = vi.fn().mockResolvedValue({
+				ok: true,
+				json: async () => ({ status: '1', result: [] })
+			});
+
+			try {
+				const wallet = new ArbitrumWallet({ network: 'mainnet' });
+				await wallet.initialize(testMnemonic);
+
+				const result = await wallet.loadTransactions();
+				expect(Array.isArray(result)).toBe(true);
+			} finally {
+				globalThis.fetch = originalFetch;
+			}
+		});
+	});
 });

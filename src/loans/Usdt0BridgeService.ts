@@ -38,8 +38,6 @@ export const OFT_ARBITRUM_ADDRESS = '0x14E4A1B13bf7F943c8ff7C51fb60FA964A298D92'
 export const AUTO_APPROVE_BUFFER = 1.01;
 
 export class Usdt0BridgeService {
-	private oftContract: ethers.Contract | null = null;
-	private usdt0Contract: ethers.Contract | null = null;
 	private readonly usdt0Address: string;
 	private readonly oftAddress: string;
 
@@ -53,25 +51,19 @@ export class Usdt0BridgeService {
 	}
 
 	/**
-	 * Get OFT contract instance (lazy init)
+	 * Get OFT contract instance (always creates fresh to use correct signer)
 	 * @param signer - Connected wallet signer
 	 */
 	getOFTContract(signer: ethers.Wallet): ethers.Contract {
-		if (!this.oftContract) {
-			this.oftContract = new ethers.Contract(this.oftAddress, OFT_ABI, signer);
-		}
-		return this.oftContract;
+		return new ethers.Contract(this.oftAddress, OFT_ABI, signer);
 	}
 
 	/**
-	 * Get USDT0 token contract instance (lazy init)
+	 * Get USDT0 token contract instance (always creates fresh to use correct signer)
 	 * @param signer - Connected wallet signer
 	 */
 	getUSDT0Contract(signer: ethers.Wallet): ethers.Contract {
-		if (!this.usdt0Contract) {
-			this.usdt0Contract = new ethers.Contract(this.usdt0Address, USDT0_ERC20_ABI, signer);
-		}
-		return this.usdt0Contract;
+		return new ethers.Contract(this.usdt0Address, USDT0_ERC20_ABI, signer);
 	}
 
 	/**
@@ -161,12 +153,24 @@ export class Usdt0BridgeService {
 	): Promise<{ txHash: string; guid: string }> {
 		try {
 			const oftContract = this.getOFTContract(signer);
+			const usdt0Contract = this.getUSDT0Contract(signer);
 			const amountLD = BigInt(amount);
 
 			// Validate preconditions
 			const preconditions = await this.validateSendPreconditions(amount, signer);
 			if (!preconditions.allowed) {
 				throw new Error(preconditions.reason ?? 'Bridge preconditions not met');
+			}
+
+			// Ensure OFT contract has approval to spend USDT0
+			const requiredAllowance = amountLD;
+			const currentAllowance: bigint = await usdt0Contract.allowance(signer.address, this.oftAddress);
+			if (currentAllowance < requiredAllowance) {
+				throw new Error(
+					`Insufficient USDT0 allowance for OFT bridge. ` +
+					`Have: ${currentAllowance.toString()}, Need: ${requiredAllowance.toString()}. ` +
+					`Call approveBridge() first.`
+				);
 			}
 
 			// Convert recipient to bytes32
@@ -256,21 +260,29 @@ export class Usdt0BridgeService {
 	}
 
 	/**
-	 * Retry a failed bridge message
-	 * Uses LayerZero's retryMessage for messages that timed out
+	 * Retry a failed bridge message via LayerZero.
 	 *
-	 * @param guid - LayerZero message GUID
+	 * The `retryMessage` function on the OFT contract requires the original
+	 * LayerZero packet payload, not just the GUID. The caller must provide the
+	 * original message bytes retrieved from the failed transaction's calldata
+	 * or from LayerZero Scan.
+	 *
+	 * @param token - Address of the token being bridged (OFT contract)
+	 * @param message - The original LayerZero message payload bytes
 	 * @param signer - Connected wallet signer
+	 * @param payInLzToken - Whether to pay retry fee in LZ token (default false)
 	 * @returns Transaction hash
 	 */
-	async retryBridge(guid: string, signer: ethers.Wallet): Promise<string> {
+	async retryBridge(
+		token: string,
+		message: string,
+		signer: ethers.Wallet,
+		payInLzToken: boolean = false
+	): Promise<string> {
 		try {
 			const oftContract = this.getOFTContract(signer);
 
-			// Encode the message for retry
-			const message = ethers.AbiCoder.defaultAbiCoder().encode(['bytes32'], [guid]);
-
-			const tx = await oftContract.retryMessage(this.usdt0Address, message, false);
+			const tx = await oftContract.retryMessage(token, message, payInLzToken);
 			const receipt = await tx.wait();
 			if (!receipt) {
 				throw new Error('Transaction receipt is null');
@@ -286,7 +298,8 @@ export class Usdt0BridgeService {
 
 	/**
 	 * Validate all preconditions before bridging
-	 * Checks: balance sufficiency, allowance, contract state
+	 * Checks: balance sufficiency, amount validity
+	 * Note: Allowance is checked separately in bridge() since it requires the exact amount
 	 */
 	async validateSendPreconditions(
 		amount: string,
@@ -305,6 +318,15 @@ export class Usdt0BridgeService {
 					allowed: false,
 					reason: `Insufficient USDT0 balance: have ${balance.toString()}, need ${amountLD.toString()}`
 				};
+			}
+
+			// Check ETH balance for gas fees
+			if (!signer.provider) {
+				return { allowed: false, reason: 'Signer has no provider' };
+			}
+			const ethBalance = await signer.provider.getBalance(signer.address);
+			if (ethBalance === BigInt(0)) {
+				return { allowed: false, reason: 'Insufficient ETH balance for gas fees' };
 			}
 
 			return { allowed: true };
@@ -328,5 +350,108 @@ export class Usdt0BridgeService {
 	 */
 	getOFTAddress(): string {
 		return this.oftAddress;
+	}
+
+	/**
+	 * Multi-hop bridge: Route USDT0 through an intermediate chain.
+	 *
+	 * Uses LayerZero compose messages to forward tokens from an intermediate
+	 * chain to the final destination. The flow is:
+	 *   Source → Intermediate (via send with composeMsg)
+	 *   Intermediate → Destination (automatic via MultiHop Composer)
+	 *
+	 * The composeMsg encodes the final destination so the intermediate OFT
+	 * knows where to forward the tokens.
+	 *
+	 * @param amount - USDT0 amount in smallest unit (6 decimals) as string
+	 * @param fromDstEid - Source chain LayerZero EID
+	 * @param intermediateDstEid - Intermediate chain LayerZero EID
+	 * @param finalDstEid - Final destination chain LayerZero EID
+	 * @param signer - Connected wallet signer
+	 * @param finalRecipientAddress - Final recipient address on destination chain
+	 * @param minAmountLD - Minimum amount to receive on destination
+	 * @returns Transaction hash and LayerZero GUID
+	 */
+	async bridgeMultiHop(
+		amount: string,
+		fromDstEid: number,
+		intermediateDstEid: number,
+		finalDstEid: number,
+		signer: ethers.Wallet,
+		finalRecipientAddress: string,
+		minAmountLD?: string
+	): Promise<{ txHash: string; guid: string }> {
+		try {
+			const oftContract = this.getOFTContract(signer);
+			const usdt0Contract = this.getUSDT0Contract(signer);
+			const amountLD = BigInt(amount);
+
+			// Validate preconditions
+			const preconditions = await this.validateSendPreconditions(amount, signer);
+			if (!preconditions.allowed) {
+				throw new Error(preconditions.reason ?? 'Bridge preconditions not met');
+			}
+
+			// Ensure OFT contract has approval to spend USDT0
+			const currentAllowance: bigint = await usdt0Contract.allowance(signer.address, this.oftAddress);
+			if (currentAllowance < amountLD) {
+				throw new Error(
+					`Insufficient USDT0 allowance for OFT bridge. ` +
+					`Have: ${currentAllowance.toString()}, Need: ${amountLD.toString()}. ` +
+					`Call approveBridge() first.`
+				);
+			}
+
+			// Encode compose message for the intermediate hop
+			// The composeMsg tells the intermediate chain's OFT where to forward the tokens
+			const finalRecipientBytes32 = ethers.zeroPadValue(finalRecipientAddress, 32);
+			const composeMsg = ethers.AbiCoder.defaultAbiCoder().encode(
+				['uint32', 'bytes32', 'uint256'],
+				[finalDstEid, finalRecipientBytes32, amountLD]
+			);
+
+			// The intermediate chain receives tokens, then forwards to final destination
+			const intermediateRecipientBytes32 = ethers.zeroPadValue(this.oftAddress, 32);
+
+			// Default minAmountLD to 96% for multi-hop (more slippage tolerance)
+			const minAmount = minAmountLD ? BigInt(minAmountLD) : (amountLD * BigInt(96)) / BigInt(100);
+
+			const sendParam = {
+				dstEid: intermediateDstEid,
+				to: intermediateRecipientBytes32,
+				amountLD,
+				minAmountLD: minAmount,
+				extraOptions: '0x',
+				composeMsg,
+				oftCmd: '0x'
+			};
+
+			// Quote fees (includes both hops)
+			const quoteResult = await oftContract.quoteSend(sendParam, false);
+			const fee = {
+				nativeFee: quoteResult?.nativeFee ?? BigInt(0),
+				lzTokenFee: quoteResult?.lzTokenFee ?? BigInt(0)
+			};
+
+			// Execute send with compose message
+			const tx = await oftContract.send(sendParam, fee, signer.address, { value: fee.nativeFee });
+
+			const receipt = await tx.wait();
+			if (!receipt) {
+				throw new Error('Transaction receipt is null');
+			}
+
+			// Extract GUID from event logs
+			const guid = receipt.logs?.[0]?.topics?.[1] ?? '0x';
+
+			return {
+				txHash: receipt.hash,
+				guid
+			};
+		} catch (error) {
+			throw new Error(
+				`Failed to multi-hop bridge USDT0: ${error instanceof Error ? error.message : 'Unknown error'}`
+			);
+		}
 	}
 }

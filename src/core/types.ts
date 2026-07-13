@@ -160,7 +160,7 @@ export interface WalletAsset extends AssetMetadata {
 	balance: number;
 	usdValue: number;
 	formattedBalance: string;
-	network: 'Liquid' | 'Bitcoin' | 'RSK' | 'BSC';
+	network: 'Liquid' | 'Bitcoin' | 'RSK' | 'BSC' | 'Arbitrum';
 }
 
 // Combined wallet state
@@ -202,6 +202,19 @@ export interface WalletState {
 		paymasterAddress: string | null;
 		canPayFeesInUsdt: boolean;
 	};
+	arbitrum: {
+		connected: boolean;
+		connecting: boolean;
+		error: string | null;
+		address: string | null;
+		ethBalance: string;
+		formattedEthBalance: string;
+		usdt0Balance: string;
+		formattedUsdt0Balance: string;
+		blockNumber: number | null;
+		provider: ethers.JsonRpcProvider | null;
+		wallet: ethers.Wallet | null;
+	};
 
 	// Combined data
 	assets: WalletAsset[];
@@ -219,7 +232,7 @@ export interface WalletState {
 	rbtcRateError: boolean;
 
 	// UI state
-	activeNetwork: 'liquid' | 'rsk' | 'bsc';
+	activeNetwork: 'liquid' | 'rsk' | 'bsc' | 'arbitrum';
 	selectedAsset: string;
 }
 

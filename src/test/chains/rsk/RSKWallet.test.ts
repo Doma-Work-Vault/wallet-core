@@ -342,7 +342,7 @@ describe('RSKWallet', () => {
 
       // Total cost should be gasLimit * gasPrice
       const expectedTotalCost = BigInt(estimate.gasLimit) * BigInt(estimate.gasPrice);
-      expect(estimate.totalCost).toBe(expectedTotalCost);
+      expect(estimate.totalCost).toBe(expectedTotalCost.toString());
     });
 
     it('should format total cost correctly', async () => {

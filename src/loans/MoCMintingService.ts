@@ -101,11 +101,11 @@ export class MoCMintingService {
 	/**
 	 * Estimate DOC mint output for a given rBTC input amount
 	 * @param rbtcAmount - rBTC amount to send in wei (18 decimals string)
-	 * @returns Estimated DOC output, fee details, and coverage ratio
+	 * @returns Estimated DOC output, rBTC cost, and coverage ratio
 	 */
 	async estimateDocMint(rbtcAmount: string): Promise<{
 		docAmount: string;
-		fee: string;
+		rbtcCost: string;
 		coverageRatio: number;
 	}> {
 		try {
@@ -122,16 +122,11 @@ export class MoCMintingService {
 				);
 			}
 
-			// getDocEmission returns expected DOC amount for given rBTC input
 			const docAmount: bigint = await mocContract.getDocEmission(rbtcAmount);
-			const inputAmount = BigInt(rbtcAmount);
-
-			// Fee = input - output (or as calculated by the protocol)
-			const fee = inputAmount > docAmount ? (inputAmount - docAmount).toString() : '0';
 
 			return {
 				docAmount: docAmount.toString(),
-				fee,
+				rbtcCost: rbtcAmount,
 				coverageRatio
 			};
 		} catch (error) {
@@ -177,6 +172,9 @@ export class MoCMintingService {
 				throw new Error('Insufficient rBTC balance for minting');
 			}
 
+			// Estimate DOC output before executing
+			const estimatedDoc: bigint = await mocContract.getDocEmission(rbtcAmount);
+
 			// Execute mintDoc with value
 			const tx = await mocContract.mintDoc(rbtcAmount, {
 				value: rbtcAmount
@@ -189,7 +187,7 @@ export class MoCMintingService {
 
 			return {
 				txHash: receipt.hash,
-				docMinted: rbtcAmount
+				docMinted: estimatedDoc.toString()
 			};
 		} catch (error) {
 			throw new Error(
@@ -231,6 +229,15 @@ export class MoCMintingService {
 				await approveTx.wait();
 			}
 
+			// Estimate rBTC output via static call before executing
+			let estimatedRbtc: string;
+			try {
+				const rbtcResult: bigint = await mocContract.redeemDoc.staticCall(docAmount);
+				estimatedRbtc = rbtcResult.toString();
+			} catch {
+				estimatedRbtc = '0';
+			}
+
 			const tx = await mocContract.redeemDoc(docAmount);
 			const receipt = await tx.wait();
 			if (!receipt) {
@@ -239,7 +246,7 @@ export class MoCMintingService {
 
 			return {
 				txHash: receipt.hash,
-				rbtcReceived: docAmount
+				rbtcReceived: estimatedRbtc
 			};
 		} catch (error) {
 			throw new Error(

@@ -32,6 +32,7 @@ export { loadBSCTransactions } from './chains/bsc/BSCTransactions';
 export { BSCPaymasterContract, PostOpMode } from './chains/bsc/BSCPaymaster';
 export { ArbitrumWallet } from './chains/arbitrum/ArbitrumWallet';
 export type { ArbitrumWalletConfig } from './chains/arbitrum/ArbitrumWallet';
+export { loadArbitrumTransactions } from './chains/arbitrum/ArbitrumTransactions';
 
 // Network configuration
 export {
@@ -146,3 +147,7 @@ export {
 	OFT_ARBITRUM_ADDRESS,
 	AUTO_APPROVE_BUFFER
 } from './loans/Usdt0BridgeService';
+export { RskDexSwapService } from './loans/RskDexSwapService';
+export type { RskDexSwapConfig, SwapQuote, SwapResult } from './loans/RskDexSwapService';
+export { LoanFlowOrchestrator } from './loans/LoanFlowOrchestrator';
+export type { LoanFlowConfig, LoanFlowQuote, LoanFlowResult } from './loans/LoanFlowOrchestrator';
