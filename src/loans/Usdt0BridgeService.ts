@@ -204,8 +204,15 @@ export class Usdt0BridgeService {
 				throw new Error('Transaction receipt is null');
 			}
 
-			// Extract GUID from event logs
-			const guid = receipt.logs?.[0]?.topics?.[1] ?? '0x';
+			// Extract GUID from LayerZero PacketSent event logs
+			const PACKET_SENT_TOPIC = ethers.id('PacketSent(bytes,bytes,address)');
+			let guid = '0x';
+			for (const log of receipt.logs) {
+				if (log.topics[0] === PACKET_SENT_TOPIC) {
+					guid = log.topics?.[1] ?? '0x';
+					break;
+				}
+			}
 
 			return {
 				txHash: receipt.hash,
@@ -441,8 +448,15 @@ export class Usdt0BridgeService {
 				throw new Error('Transaction receipt is null');
 			}
 
-			// Extract GUID from event logs
-			const guid = receipt.logs?.[0]?.topics?.[1] ?? '0x';
+			// Extract GUID from LayerZero PacketSent event logs
+			const PACKET_SENT_TOPIC = ethers.id('PacketSent(bytes,bytes,address)');
+			let guid = '0x';
+			for (const log of receipt.logs) {
+				if (log.topics[0] === PACKET_SENT_TOPIC) {
+					guid = log.topics?.[1] ?? '0x';
+					break;
+				}
+			}
 
 			return {
 				txHash: receipt.hash,

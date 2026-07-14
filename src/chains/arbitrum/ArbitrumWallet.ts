@@ -249,7 +249,7 @@ export class ArbitrumWallet {
 				throw new Error('Invalid recipient address');
 			}
 
-			const decimals: number = await contract.decimals();
+			const decimals: number = tokenConfig.decimals ?? await contract.decimals();
 			const amountUnits = ethers.parseUnits(amount, decimals);
 
 			// Check token balance

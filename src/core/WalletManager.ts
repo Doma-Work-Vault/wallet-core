@@ -467,10 +467,21 @@ export class WalletManager {
 		// Clean up WebSocket
 		if (this._websocket) this._websocket.disconnect();
 
-		// Clean up event listeners
-		if (this._reverseSwapService) this._reverseSwapService.events.clear();
-		if (this._chainSwapService) this._chainSwapService.events.clear();
-		if (this._submarineSwapService) this._submarineSwapService.events.clear();
+		// Clean up event listeners and null out references
+		if (this._reverseSwapService) { 
+			this._reverseSwapService.events.clear(); 
+			this._reverseSwapService = null as any; 
+		}
+		if (this._chainSwapService) { 
+			this._chainSwapService.events.clear(); 
+			this._chainSwapService = null as any; 
+		}
+		if (this._submarineSwapService) {
+			this._submarineSwapService.events.clear(); 
+			this._submarineSwapService = null as any; 
+		}
+		this._evmContractService = null as any;
+		this._boltzClient = null as any;
 		this._loanFlowOrchestrator = null;
 	}
 }

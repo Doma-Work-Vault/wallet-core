@@ -26,7 +26,7 @@ export async function loadArbitrumTransactions(
 		const transactions: Transaction[] = [];
 
 		// Fetch ETH transactions
-		const ethUrl = `${explorerApiUrl}?chainid=${arbConfig.chainId}&module=account&action=txlist&address=${address}&startblock=0&endblock=99999999&sort=desc${apiKey ? `&apikey=${apiKey}` : ''}`;
+		const ethUrl = `${explorerApiUrl}?module=account&action=txlist&address=${address}&startblock=0&endblock=99999999&sort=desc${apiKey ? `&apikey=${apiKey}` : ''}`;
 		const ethResponse = await fetch(ethUrl);
 
 		if (!ethResponse.ok) {
@@ -48,7 +48,7 @@ export async function loadArbitrumTransactions(
 
 		for (const contractAddress of tokenAddresses) {
 			try {
-				const tokenUrl = `${explorerApiUrl}?chainid=${arbConfig.chainId}&module=account&action=tokentx&contractaddress=${contractAddress}&address=${address}&startblock=0&endblock=99999999&sort=desc${apiKey ? `&apikey=${apiKey}` : ''}`;
+				const tokenUrl = `${explorerApiUrl}?module=account&action=tokentx&contractaddress=${contractAddress}&address=${address}&startblock=0&endblock=99999999&sort=desc${apiKey ? `&apikey=${apiKey}` : ''}`;
 				const tokenResponse = await fetch(tokenUrl);
 
 				if (tokenResponse.ok) {

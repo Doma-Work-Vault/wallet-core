@@ -341,6 +341,9 @@ export class LoanFlowOrchestrator {
 		);
 
 		if (!completedSteps.has('mint-doc') && savedState.rbtcAmount) {
+			// Need to start from scratch but preserve the saved state context
+			this.currentState.steps = [];
+			this.currentState.phase = 'COLLECTING_INPUT';
 			await this.executeFullFlow(savedState.rbtcAmount);
 		} else if (!completedSteps.has('swap-doc-usdt0') && savedState.docAmount) {
 			await this.resumeFromDocSwap(savedState.docAmount);
@@ -369,7 +372,7 @@ export class LoanFlowOrchestrator {
 		return { txHash: result.txHash };
 	}
 
-	private async resumeFromDocSwap(docAmount: string): Promise<void> {
+	private async resumeFromDocSwap(docAmount: string, slippagePercent: number = 1): Promise<void> {
 		try {
 			this.updatePhase('SWAPPING_DOC_TO_USDT0');
 			this.addStep('swap-doc-usdt0', 'Swap DOC → USDT0 on RSK', 'active');
@@ -388,11 +391,16 @@ export class LoanFlowOrchestrator {
 				this.config.rskSigner
 			);
 
+			// Apply slippage on top of the quote (consistent with executeFullFlow)
+			const minOutput = BigInt(swapQuote.outputAmount);
+			const slippageMultiplier = BigInt(Math.floor((100 - slippagePercent) * 10));
+			const minOutputWithSlippage = (minOutput * slippageMultiplier) / BigInt(1000);
+
 			const swapResult = await this.dexService.swap(
 				docToken.address,
 				usdt0Token.address,
 				docAmount,
-				swapQuote.minOutputAmount,
+				minOutputWithSlippage.toString(),
 				this.config.rskSigner
 			);
 			this.currentState.usdt0RskAmount = swapResult.outputAmount;

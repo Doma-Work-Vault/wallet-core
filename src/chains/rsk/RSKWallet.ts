@@ -5,7 +5,7 @@
 
 import type { GasEstimation, NetworkType } from '../../core/types';
 import { ethers } from 'ethers';
-import { RSK_NETWORKS } from '../../utils/networkConfig';
+import { RSK_NETWORKS, ERC20_ABI } from '../../utils/networkConfig';
 import { isValidRskAddress, normalizeRskAddress, toEip1191ChecksumAddress } from '../../utils/rskAddress';
 import { loadRSKTransactions } from './RSKTransactions';
 
@@ -147,6 +147,46 @@ export class RSKWallet {
             return tx.hash;
         } catch (error) {
             throw new Error(`Failed to send RBTC: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        }
+    }
+
+    /**
+     * Send ERC-20 token on RSK (e.g., USDT0, DOC)
+     * @param tokenAddress - ERC-20 contract address
+     * @param to - Recipient address
+     * @param amount - Amount in human-readable units (e.g., "10.50" for 10.5 USDT0)
+     * @param decimals - Token decimals (default 6 for USDT0)
+     */
+    async sendToken(tokenAddress: string, to: string, amount: string, decimals: number = 6): Promise<string> {
+        if (!this.provider || !this.wallet) {
+            throw new Error('Wallet not initialized');
+        }
+
+        try {
+            const chainId = RSK_NETWORKS[this.config.network].chainId;
+            if (!isValidRskAddress(to, chainId)) {
+                throw new Error('Invalid recipient address');
+            }
+            if (!ethers.isAddress(tokenAddress)) {
+                throw new Error('Invalid token address');
+            }
+            const normalizedTo = normalizeRskAddress(to);
+
+            // Check RBTC balance for gas
+            const rbtcBalance = await this.provider.getBalance(this.wallet.address);
+            if (rbtcBalance === BigInt(0)) {
+                throw new Error('Insufficient RBTC balance for gas fees');
+            }
+
+            const tokenContract = new ethers.Contract(tokenAddress, ERC20_ABI, this.wallet);
+            const amountWei = ethers.parseUnits(amount, decimals);
+
+            const tx = await tokenContract.transfer(normalizedTo, amountWei);
+            await tx.wait();
+
+            return tx.hash;
+        } catch (error) {
+            throw new Error(`Failed to send token: ${error instanceof Error ? error.message : 'Unknown error'}`);
         }
     }
 

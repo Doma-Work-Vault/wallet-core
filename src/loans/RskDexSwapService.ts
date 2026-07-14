@@ -209,11 +209,25 @@ export class RskDexSwapService {
 				throw new Error('Transaction receipt is null');
 			}
 
-			// Get actual output from the getAmountsOut estimate (actual output may differ slightly)
+			// Get actual output from the transaction receipt instead of re-querying getAmountsOut
+			// (reserves change after swap, so getAmountsOut returns wrong values)
 			let actualOutput = minOutputAmount;
 			try {
-				const amounts: bigint[] = await router.getAmountsOut(inputAmountBN, path);
-				actualOutput = amounts[amounts.length - 1].toString();
+				const SWAP_TOPIC = ethers.id('Swap(address,uint256,uint256,uint256,uint256,address)');
+				for (const log of receipt.logs) {
+					if (log.topics[0] === SWAP_TOPIC) {
+						const decoded = ethers.AbiCoder.defaultAbiCoder().decode(
+							['uint256', 'uint256', 'uint256', 'uint256'],
+							log.data
+						);
+						// amount0Out (index 2) or amount1Out (index 3) — identify by output token address
+						const out0 = BigInt(decoded[2]);
+						const out1 = BigInt(decoded[3]);
+						// For DOC→USDT0, the output is the non-zero value
+						actualOutput = (out0 > out1 ? out0 : out1).toString();
+						break;
+					}
+				}
 			} catch {
 				actualOutput = minOutputAmount;
 			}
