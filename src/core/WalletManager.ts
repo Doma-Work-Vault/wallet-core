@@ -27,6 +27,7 @@ import { SubmarineSwapService } from '../swaps/boltz/SubmarineSwapService';
 import { BoltzWebSocket } from '../swaps/boltz/WebSocketClient';
 import { EvmContractService } from '../swaps/boltz/EvmContractService';
 import { BoltzClient } from '../swaps/boltz/BoltzClient';
+import { LoanFlowOrchestrator } from '../loans/LoanFlowOrchestrator';
 
 export interface WalletManagerConfig {
 	/** Network type: 'mainnet' or 'testnet' */
@@ -106,6 +107,7 @@ export class WalletManager {
 	private _reverseSwapService: ReverseSwapService | null = null;
 	private _chainSwapService: ChainSwapService | null = null;
 	private _submarineSwapService: SubmarineSwapService | null = null;
+	private _loanFlowOrchestrator: LoanFlowOrchestrator | null = null;
 	constructor(config: WalletManagerConfig) {
 		this.config = config;
 
@@ -401,6 +403,29 @@ export class WalletManager {
 	}
 
 	/**
+	 * Get the Loan Flow Orchestrator (lazy-loaded)
+	 *
+	 * Orchestrates: rBTC → DOC (MoC) → USDT0 (DEX) → USDT0-Arb (LayerZero)
+	 *
+	 * @param arbRecipientAddress - Optional Arbitrum recipient address.
+	 *   Defaults to the Arbitrum wallet address from this WalletManager.
+	 */
+	getLoanFlowOrchestrator(arbRecipientAddress?: string): LoanFlowOrchestrator {
+		if (!this._loanFlowOrchestrator) {
+			const rskSigner = this.rskWallet.getWallet();
+			const rskProvider = this.rskWallet.getProvider();
+			const recipient = arbRecipientAddress ?? this.arbWallet.getAddress();
+
+			this._loanFlowOrchestrator = new LoanFlowOrchestrator({
+				rskSigner,
+				rskProvider,
+				arbRecipientAddress: recipient
+			});
+		}
+		return this._loanFlowOrchestrator;
+	}
+
+	/**
 	 * Subscribe to swap updates from ALL swap services
 	 * Convenience method for clients that want to monitor all swaps
 	 * 
@@ -446,5 +471,6 @@ export class WalletManager {
 		if (this._reverseSwapService) this._reverseSwapService.events.clear();
 		if (this._chainSwapService) this._chainSwapService.events.clear();
 		if (this._submarineSwapService) this._submarineSwapService.events.clear();
+		this._loanFlowOrchestrator = null;
 	}
 }

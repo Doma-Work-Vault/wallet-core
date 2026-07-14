@@ -407,7 +407,6 @@ export class ReverseSwapService {
 		walletSigner: ethers.Signer
 	): Promise<{ txHash: string }> {
 		try {
-			console.log(swapData)
 			// Validate required data
 			if (
 				!swapData.preimage ||
@@ -420,7 +419,6 @@ export class ReverseSwapService {
 
 			// Get EtherSwap contract address
 			const etherSwapAddress = await this.evmContractService.getEtherSwapAddress();
-			console.log({ etherSwapAddress })
 
 			// Get actual lockup parameters from event
 			let amount: number;
@@ -434,7 +432,6 @@ export class ReverseSwapService {
 					walletSigner.provider,
 					etherSwapAddress
 				);
-				console.log({ eventParams })
 
 				if (eventParams) {
 					amount = weiToSatoshi(eventParams.amount);
@@ -449,8 +446,6 @@ export class ReverseSwapService {
 				amount = swapData.onchainAmount;
 				refundAddress = swapData.refundAddress;
 				timelock = swapData.timeoutBlockHeight;
-
-				console.log({ amount, refundAddress, timelock })
 			}
 
 			// Use RifRelayClaimService for gasless claim
@@ -462,7 +457,6 @@ export class ReverseSwapService {
 				refundAddress,
 				timelock
 			});
-			console.log({ txHash })
 
 			// Update swap data
 			swapData.claimTxHash = txHash;

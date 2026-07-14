@@ -151,3 +151,39 @@ export { RskDexSwapService } from './loans/RskDexSwapService';
 export type { RskDexSwapConfig, SwapQuote, SwapResult } from './loans/RskDexSwapService';
 export { LoanFlowOrchestrator } from './loans/LoanFlowOrchestrator';
 export type { LoanFlowConfig, LoanFlowQuote, LoanFlowResult } from './loans/LoanFlowOrchestrator';
+
+// ERC-20 utilities
+export {
+	encodeERC20Transfer,
+	encodeERC20Approve,
+	encodeERC20BalanceOf,
+	encodeERC20Allowance,
+	decodeERC20Balance,
+	waitForERC20Balance,
+	waitForERC20Allowance,
+	usdToTokenWei,
+	tokenWeiToUsd,
+	formatTokenAmount
+} from './utils/erc20';
+export type { WaitForBalanceOptions } from './utils/erc20';
+
+// Multi-chain token registry (single source of truth)
+export {
+	USDT_ADDRESSES,
+	WBTC_ADDRESSES,
+	TBTC_ADDRESSES,
+	DOC_ADDRESSES,
+	OFT_ADDRESSES,
+	LZ_EIDS,
+	USDT0_DECIMALS,
+	WBTC_DECIMALS,
+	TBTC_DECIMALS,
+	DOC_DECIMALS,
+	getUsdtToken,
+	getWbtcToken,
+	getTbtcToken,
+	getTokensForChain,
+	getUsdtAddressByChainId,
+	getUsdtDecimalsByChainId
+} from './tokens/registry';
+export type { SupportedChain } from './tokens/registry';
