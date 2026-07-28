@@ -5,6 +5,66 @@ All notable changes to @bittasker/wallet-core will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] - 2026-07-28
+
+### Added
+- **Arbitrum Wallet**: Full Arbitrum L2 support via `ArbitrumWallet`
+  - ETH and ERC-20 token transactions (USDT0, WBTC, tBTC)
+  - Arbiscan API integration for transaction history
+  - Token balance queries and send/receive operations
+- **USDT0 Cross-Chain Bridge**: `Usdt0BridgeService` for USDT0 transfers via LayerZero OFT
+  - RSK ↔ Arbitrum USDT0 bridging
+  - Allowance management and retry logic for failed bridges
+  - PacketSent event log filtering for GUID extraction
+- **MoC Minting Service**: `MoCMintingService` for DOC token minting via Money on Chain on RSK
+  - `mintDoc()`, `redeemDoc()`, `estimateDocMint()` with proper output estimation
+  - StaticCall-based rBTC estimation before execution
+- **RSK DEX Swap Service**: `RskDexSwapService` for DOC → USDT0 swaps on RSK
+  - Uniswap V2 compatible routing
+  - Proper swap output parsing without balance-based fallbacks
+- **Loan Flow Orchestrator**: `LoanFlowOrchestrator` for multi-step rBTC → DOC → USDT0(RSK) → USDT0(Arb) flow
+  - `executeFullFlow()` and `resumeFromDocSwap()` with consistent slippage handling
+  - Phase tracking and state management
+- **ERC-20 Utilities**: New `src/utils/erc20.ts` module (10 exports)
+  - `encodeERC20Transfer`, `waitForERC20Balance`, `usdToTokenWei`, `formatTokenAmount` and more
+- **Token Registry**: New `src/tokens/registry.ts` as single source of truth
+  - USDT/WBTC/tBTC/DOC addresses across 7 chains
+  - Helper lookups: `getUsdtToken()`, `getUsdtAddressByChainId()`, etc.
+- **WalletManager Integration**: Arbitrum wallet integrated into WalletManager
+  - `WalletState.arbitrum` section with ETH and token balances
+  - `activeNetwork` union includes Arbitrum
+  - `dispose()` nulls out service references to prevent stale access
+- **66 new tests** for ERC-20 utilities, token registry, ArbitrumWallet, MoCMintingService, Usdt0BridgeService, RskDexSwapService, and LoanFlowOrchestrator (619 total)
+
+### Fixed
+- **Boltz Claim Reliability**: Increased transaction receipt retry logic for RSK's ~30s block times
+  - `BoltzClient.getLockupEventParameters()`: 10×2s (20s) → 30×3s (90s)
+  - `EvmContractService.getLockupEventParameters()`: same timing increase
+  - Covers 3 full RSK blocks instead of less than 1
+- **RefundAddress Validation**: Added comprehensive validation with Boltz API fallback
+  - `ChainSwapService` now validates `refundAddress` before both RIF Relay and direct claims
+  - Falls back to Boltz API `getSwapStatus()` to recover missing/corrupt addresses
+  - Detailed error messages with recovery instructions if all fallbacks fail
+- **RSKWallet.sendToken()**: Added token address validation and RBTC gas pre-check
+- **ArbitrumWallet.sendToken()**: Uses cached `tokenConfig.decimals` instead of RPC call
+- **ArbitrumTransactions**: Removed `?chainid=` param from Arbiscan API URLs
+- **ESM Resolution**: Added `.js` extensions to all relative imports in 22 source files
+  - Ensures `dist/` output resolves correctly in Node.js ESM consumers
+- **MoCMintingService**: `mintDoc()` returns estimated DOC output via `getDocEmission()`
+- **MoCMintingService**: `estimateDocMint()` returns `rbtcCost` instead of meaningless `fee`
+- **Usdt0BridgeService**: Removed contract caching (signer safety), added allowance check in `bridge()`
+- **Usdt0BridgeService**: Rewrote `retryBridge()` to accept raw message bytes per OFT interface
+- **EvmContractService**: Improved error messages with actual values for preimage, refundAddress, timelock, amount
+
+### Changed
+- **Debug Logging**: Removed 5 debug `console.log` from `ReverseSwapService.claimRBTCViaRifRelay()`
+  - Were dumping sensitive swap data (preimages, amounts) to production logs
+
+### Documentation
+- Added USDT0 implementation audit report to `docs/`
+
+[0.2.0]: https://gitlab.com/bittasker/wallet-core/-/tags/v0.2.0
+
 ## [0.1.10] - 2026-01-25
 
 ### Fixed

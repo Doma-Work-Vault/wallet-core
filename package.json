@@ -67,7 +67,6 @@
   },
   "homepage": "https://gitlab.com/bittasker/wallet-core#readme",
   "dependencies": {
-    "@bittasker/wallet-core": "file:bittasker-wallet-core-0.2.0.tgz",
     "axios": "^1.8.4",
     "bip32": "^4.0.0",
     "bip39": "^3.1.0",
