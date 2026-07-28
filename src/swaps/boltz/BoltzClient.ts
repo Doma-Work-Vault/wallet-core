@@ -716,10 +716,10 @@ export async function getLockupEventParameters(
 	try {
 
 		// Wait for the transaction receipt with retry logic
-		// The RPC node might need a few moments to index the transaction
+		// RSK blocks are ~30s, so we need enough retries to cover multiple blocks
 		let receipt = null;
-		const maxRetries = 10;
-		const retryDelay = 2000; // 2 seconds
+		const maxRetries = 30; // 30 retries × 3s = 90s (covers 3 RSK blocks)
+		const retryDelay = 3000; // 3 seconds
 
 		for (let i = 0; i < maxRetries; i++) {
 			receipt = await provider.getTransactionReceipt(lockupTxHash);
@@ -734,7 +734,7 @@ export async function getLockupEventParameters(
 		}
 
 		if (!receipt) {
-			console.error('❌ Transaction receipt not found after', maxRetries, 'attempts');
+			console.error('❌ Transaction receipt not found after', maxRetries, 'attempts (', (maxRetries * retryDelay) / 1000, 's total)');
 			return null;
 		}
 

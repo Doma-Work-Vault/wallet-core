@@ -496,6 +496,36 @@ export class ChainSwapService {
 				timelock = swapData.claimTimeoutBlockHeight;
 			}
 
+			// Validate refundAddress before calling RIF Relay claim
+			if (!refundAddress || !ethers.isAddress(refundAddress?.toLowerCase?.() ?? '')) {
+				console.warn(
+					'⚠️ RIF Relay: refundAddress is invalid:',
+					JSON.stringify(refundAddress),
+					'(type:', typeof refundAddress, ')'
+				);
+
+				// Try to fetch fresh claim details from Boltz API
+				if (swapData.id) {
+					try {
+						const statusResult = await this.boltzClient.getSwapStatus(swapData.id);
+						const apiRefund = (statusResult as any)?.claimDetails?.refundAddress;
+						if (apiRefund && ethers.isAddress(apiRefund.toLowerCase())) {
+							console.log('✅ RIF Relay: Recovered refundAddress from Boltz API');
+							refundAddress = apiRefund;
+						}
+					} catch (apiError) {
+						console.error('❌ RIF Relay: Failed to fetch refund address from Boltz API:', apiError);
+					}
+				}
+
+				if (!refundAddress || !ethers.isAddress(refundAddress?.toLowerCase?.() ?? '')) {
+					throw new Error(
+						`Cannot claim via RIF Relay: refundAddress is invalid. ` +
+						`swapData.refundAddress="${swapData.refundAddress}", swapId="${swapData.id}"`
+					);
+				}
+			}
+
 			// Use RifRelayClaimService for gasless claim
 			const txHash = await this.rifRelayService.claimViaRifRelay({
 				walletSigner: wallet,
@@ -587,6 +617,44 @@ export class ChainSwapService {
 			amount = swapData.toAmount;
 			refundAddress = swapData.refundAddress;
 			timelock = swapData.claimTimeoutBlockHeight;
+		}
+
+		// Validate refundAddress before calling claimFunds
+		// If invalid, try to fetch from Boltz API as last resort
+		if (!refundAddress || !ethers.isAddress(refundAddress?.toLowerCase?.() ?? '')) {
+			console.warn(
+				'⚠️ refundAddress is invalid or missing:',
+				JSON.stringify(refundAddress),
+				'(type:', typeof refundAddress, ')'
+			);
+			console.warn('swapData.refundAddress:', JSON.stringify(swapData.refundAddress));
+
+			// Try to fetch fresh claim details from Boltz API
+			if (swapData.id) {
+				try {
+					const statusResult = await this.boltzClient.getSwapStatus(swapData.id);
+					const apiRefund = (statusResult as any)?.claimDetails?.refundAddress;
+					if (apiRefund && ethers.isAddress(apiRefund.toLowerCase())) {
+						console.log('✅ Recovered refundAddress from Boltz API:', apiRefund.substring(0, 10) + '...');
+						refundAddress = apiRefund;
+					} else {
+						console.error('❌ Boltz API also returned invalid refundAddress:', JSON.stringify(apiRefund));
+					}
+				} catch (apiError) {
+					console.error('❌ Failed to fetch refund address from Boltz API:', apiError);
+				}
+			}
+
+			// Final validation — if still invalid, abort with detailed error
+			if (!refundAddress || !ethers.isAddress(refundAddress?.toLowerCase?.() ?? '')) {
+				throw new Error(
+					`Cannot claim: refundAddress is invalid after all fallbacks. ` +
+					`swapData.refundAddress="${swapData.refundAddress}", ` +
+					`swapId="${swapData.id}", ` +
+					`The user's rBTC is locked in the EtherSwap contract and can be recovered ` +
+					`by calling refund() after the RSK timelock expires (${swapData.claimTimeoutBlockHeight}).`
+				);
+			}
 		}
 
 		// Use EvmContractService to claim funds

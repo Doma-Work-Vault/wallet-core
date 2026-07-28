@@ -146,19 +146,23 @@ export class EvmContractService {
             }
 
             if (!params.preimage || params.preimage.length !== 64) {
-                throw new Error('Invalid preimage: must be 32 bytes (64 hex characters)');
+                throw new Error(`Invalid preimage: must be 32 bytes (64 hex chars), got ${params.preimage?.length ?? 0} chars`);
             }
 
             if (!params.refundAddress || !ethers.isAddress(params.refundAddress.toLowerCase())) {
-                throw new Error('Invalid refund address');
+                throw new Error(
+                    `Invalid refund address: "${params.refundAddress}" (type: ${typeof params.refundAddress}). ` +
+                    `This means the on-chain Lockup event could not be read and the Boltz API fallback value is missing or corrupt. ` +
+                    `Swap may need manual recovery after timelock expires.`
+                );
             }
 
             if (!params.timelock || params.timelock <= 0) {
-                throw new Error('Invalid timelock');
+                throw new Error(`Invalid timelock: ${params.timelock}`);
             }
 
             if (!params.amount || params.amount <= 0) {
-                throw new Error('Invalid amount: must be greater than 0');
+                throw new Error(`Invalid amount: ${params.amount}`);
             }
 
             // Get EtherSwap contract address
@@ -292,9 +296,10 @@ export class EvmContractService {
             contractAddress = contractAddress || await this.getEtherSwapAddress();
 
             // Wait for the transaction receipt with retry logic
+            // RSK blocks are ~30s, so we need enough retries to cover multiple blocks
             let receipt = null;
-            const maxRetries = 10;
-            const retryDelay = 2000; // 2 seconds
+            const maxRetries = 30; // 30 retries × 3s = 90s (covers 3 RSK blocks)
+            const retryDelay = 3000; // 3 seconds
 
             for (let i = 0; i < maxRetries; i++) {
                 receipt = await provider.getTransactionReceipt(lockupTxHash);
@@ -309,7 +314,7 @@ export class EvmContractService {
             }
 
             if (!receipt) {
-                console.error('❌ Transaction receipt not found after', maxRetries, 'attempts');
+                console.error('❌ Transaction receipt not found after', maxRetries, 'attempts (', (maxRetries * retryDelay) / 1000, 's total)');
                 return null;
             }
 

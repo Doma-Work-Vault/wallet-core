@@ -558,7 +558,7 @@ describe('getLockupEventParameters', () => {
     );
 
     expect(result).toBeNull();
-  }, 30000); // 30 second timeout for retry logic
+  }, 100000); // 100s timeout: 30 retries × 3s delay = 90s max wait
 
   it('should return null on error', async () => {
     const mockProvider = {
