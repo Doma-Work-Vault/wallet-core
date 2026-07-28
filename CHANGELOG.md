@@ -5,6 +5,18 @@ All notable changes to @bittasker/wallet-core will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.1] - 2026-07-28
+
+### Changed
+- **Build Tooling**: Migrated from `tsc` to `tsup` for building dist output
+  - Replaces bare `tsc` compilation with tsup (esbuild-based) bundler
+  - Bundles `boltz-core` and its JSON artifacts into the output, eliminating runtime resolution issues with strict ESM consumers (Node.js v26+)
+  - Adds CJS `require` shim via `createRequire` banner for boltz-core's CommonJS internals
+  - Generates `.d.ts` declarations via tsup's `--dts` flag (same as before)
+  - Source code unchanged — zero modifications to `.ts` files
+
+[0.2.1]: https://gitlab.com/bittasker/wallet-core/-/tags/v0.2.1
+
 ## [0.2.0] - 2026-07-28
 
 ### Added
