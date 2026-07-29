@@ -5,13 +5,24 @@ All notable changes to @bittasker/wallet-core will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.2] - 2026-07-29
+
+### Changed
+
+- **Browser Compatibility**: Removed Node.js-only `createRequire` banner from tsup config
+- The build incorrectly bundled `import { createRequire } from 'module'` in every output file
+- `module` is a Node.js-only built-in that doesn't exist in browsers, causing `Failed to resolve module specifier "module"` errors in SPA/Vite builds
+- Removed `noExternal: [/boltz-core/]` and `banner` from tsup config — dependencies are now external imports resolved by the consuming app's bundler
+- Vite handles CJS→ESM interop and JSON imports natively, so bundling boltz-core was unnecessary for Vite consumers
+- dist size reduced from ~2.7MB to ~2.4MB (deps external)
+
+[0.2.2]: https://gitlab.com/bittasker/wallet-core/-/tags/v0.2.2
+
 ## [0.2.1] - 2026-07-28
 
 ### Changed
 - **Build Tooling**: Migrated from `tsc` to `tsup` for building dist output
   - Replaces bare `tsc` compilation with tsup (esbuild-based) bundler
-  - Bundles `boltz-core` and its JSON artifacts into the output, eliminating runtime resolution issues with strict ESM consumers (Node.js v26+)
-  - Adds CJS `require` shim via `createRequire` banner for boltz-core's CommonJS internals
   - Generates `.d.ts` declarations via tsup's `--dts` flag (same as before)
   - Source code unchanged — zero modifications to `.ts` files
 
